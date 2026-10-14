@@ -6,10 +6,10 @@
 
 [Watch it running](https://www.youtube.com/watch?v=EqCQ85O4dbw)
 
-| | | |
-|---|---|---|
-| ![Gameplay](ps4/docs/screenshots/gameplay-1.jpg) | ![Gameplay](ps4/docs/screenshots/gameplay-2.jpg) | ![The opening book](ps4/docs/screenshots/opening-book.jpg) |
-| ![Installed on the PS4 home screen](ps4/docs/screenshots/installed.jpg) | ![Setup copying from the USB drive](ps4/docs/screenshots/setup-copying.jpg) | ![Setup unpacking the game](ps4/docs/screenshots/setup-unpacking.jpg) |
+| | |
+|---|---|
+| ![Gameplay](ps4/docs/screenshots/gameplay-1.jpg) | ![Gameplay](ps4/docs/screenshots/gameplay-2.jpg) |
+| ![The opening book](ps4/docs/screenshots/opening-book.jpg) | ![Installed on the PS4 home screen](ps4/docs/screenshots/installed.jpg) |
 
 ## Install in three steps
 
