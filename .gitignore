@@ -67,3 +67,14 @@ AGENTS.md
 
 # MacOS
 .DS_Store
+
+# The PS4 port's build products (packages, ELFs with symbols). The two stock Sony modules the package bundles
+# are kept in ps4/redist-sony/signed so the package can be built from this repository.
+/ps4/out/
+*.pkg
+*.iso
+/ps4/dist/
+*.sprx
+!/ps4/redist-sony/signed/*.sprx
+*.elf
+*.oelf
