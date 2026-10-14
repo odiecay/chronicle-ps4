@@ -26,16 +26,6 @@ The game sets itself up from your disc image. A few minutes later it says it's r
 
 Your saves live in `/data/darkcloud/save` and stay on the console, including when you update.
 
-## Known issues
-
-This is the first preview (v0.1.0).
-
-* Some menu backdrops may not draw. The graphics driver's memory pool is small.
-* Shadows use a 16-bit depth buffer, the most the PS4 driver gives. Rarely a shadow may look wrong.
-* The first run writes a tuned `config.json` (soft focus off, 60 fps cap, 1080p). Everything can be changed in the game's options, and an existing `config.json` is never overwritten.
-
-Please report problems with the log attached: `/data/darkcloud/ps4_boot.log`.
-
 ## For developers
 
 Everything needed to build the package is in this one repository, including the renderer and the two Sony modules, and a plain `git clone` is enough. The build steps, tested on a fresh clone, are in **[`ps4/docs/BUILDING.md`](ps4/docs/BUILDING.md)**. How the port is put together, the options and the measurements are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme is [`README-CHRONICLE.md`](README-CHRONICLE.md).
