@@ -22,18 +22,17 @@ The game sets itself up from your disc image. A few minutes later it says it's r
 
 * **No game data is included.** You bring your own disc image.
 * Tested on firmware 13.52 with the **USA NTSC 1.02** disc. Other discs haven't been tried on a console.
-* The package contains two unmodified Sony system files, so it works with no extra steps. [See exactly what's inside.](ps4/docs/PACKAGE-CONTENTS.md)
 
 Your saves live in `/data/darkcloud/save` and stay on the console, including when you update.
 
 ## For developers
 
-Everything needed to build the package is in this one repository, including the renderer and the two Sony modules, and a plain `git clone` is enough. The build steps, tested on a fresh clone, are in **[`ps4/docs/BUILDING.md`](ps4/docs/BUILDING.md)**. How the port is put together, the options and the measurements are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme is [`README-CHRONICLE.md`](README-CHRONICLE.md).
+Everything needed to build the package is in this one repository, including the renderer, and a plain `git clone` is enough. The build steps, tested on a fresh clone, are in **[`ps4/docs/BUILDING.md`](ps4/docs/BUILDING.md)**. How the port is put together, the options and the measurements are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme is [`README-CHRONICLE.md`](README-CHRONICLE.md).
 
 ## Credits
 
 * The **Chronicle** team ([TheMoonPeople](https://github.com/TheMoonPeople)) for the Dark Cloud decompilation and the Kazarov build system (MIT, in `tools/kazarov`). This port stands on their work.
-* **Level-5** made Dark Cloud. This project is not affiliated with Level-5 or Sony.
+* **Level-5** made Dark Cloud. This project is not affiliated with them.
 * The **Ship of Harkinian PS4 port** showed how to do native PS4 homebrew with Piglet.
 * [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) and [GoldHEN](https://github.com/GoldHEN/GoldHEN).
 * **FlameCheese** for the 8-bit Dark Cloud remixes played during setup.
