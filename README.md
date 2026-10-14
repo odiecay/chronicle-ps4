@@ -1,72 +1,63 @@
-# Chronicle
+# Chronicle PS4 (Dark Cloud)
 
-[![NTSC Progress]](https://decomp.dev/TheMoonPeople/Chronicle/ntsc)
-[![PAL Progress]](https://decomp.dev/TheMoonPeople/Chronicle/pal)
+**Dark Cloud, running natively on a jailbroken PS4.** Not an emulator: this is the [Chronicle](https://github.com/TheMoonPeople/Chronicle) decompilation of Dark Cloud, built for the PS4 with a graphics layer written for it. It runs at 1080p and holds 60 frames a second.
 
-[NTSC Progress]: https://decomp.dev/TheMoonPeople/Chronicle/ntsc.svg?mode=shield&label=NTSC&measure=matched_code_percent
-[PAL Progress]: https://decomp.dev/TheMoonPeople/Chronicle/pal.svg?mode=shield&label=PAL&measure=matched_code_percent
-[progress_link]: https://decomp.dev/TheMoonPeople/Chronicle/
+**[Download the latest release](../../releases/latest)** · [Video](https://www.youtube.com/watch?v=EqCQ85O4dbw) · [Install guide](ps4/docs/INSTALL.md) · [What is inside the package](ps4/docs/PACKAGE-CONTENTS.md)
 
-[<img src="https://decomp.dev/TheMoonPeople/Chronicle/ntsc.svg?w=512&h=256" width="512" height="256" alt="A visual">][progress_link]
+You bring your own copy of the game. Nothing from the disc is in this download.
 
-Chronicle is a decompilation project and port of Dark Cloud for the PlayStation 2.
+## What you need
 
-This project produces 100% matching text and data sections for the main executable for the NTSC 1.02 and PAL review versions, and 100% matching `TITLE.BIN` and `DUN.BIN` overlays. Matching the main executable's debug symbols may be explored in the future.
+* A PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN) (tested on firmware 13.52).
+* Your own **Dark Cloud (USA, NTSC 1.02)** disc image as an `.iso`, about 1.7 GB. The PAL release is supported in the code but has not been tried on a console.
+* A USB drive (exFAT or FAT32), or an FTP client.
+* About 4 GB free on the PS4.
 
-# Building and running
+## Quick start
 
-1. Clone the repository with `git clone --recurse-submodules https://github.com/TheMoonPeople/Chronicle.git`.
-   The build system is Kazarov, in `tools/kazarov`; the first build fetches it if it is missing.
-2. Place your disc image in `rom/<region>/`: `rom/pal/Dark Cloud (PAL).iso` for the PAL release, or
-   `rom/ntsc/Dark Cloud (NTSC).iso` for NTSC 1.02. An image at `rom/Dark Cloud (<REGION>).iso` is also accepted.
-3. Run `./build.sh <configuration>`, or `build.bat <configuration>` on Windows.
+1. On a USB drive, make a folder named `darkcloud` and put your `.iso` in it. Put `DarkCloud-PS4-01.00.pkg` in the main folder of the drive.
+2. Plug it into the PS4 and install the package with GoldHEN's Package Installer.
+3. Start **Chronicle PS4 (Dark Cloud)** from the home screen and leave the drive plugged in.
 
-`./run.sh <configuration> [arguments]` builds the same way and then launches the result. PS2
-configurations boot the disc image in PCSX2; port configurations start the game, with the arguments
-passed on to it.
+The game finds your disc image and sets itself up. A few minutes later it says it is ready, and you press X to play. You only do this once. The [install guide](ps4/docs/INSTALL.md) has the FTP route and fixes for common problems.
 
-| Configuration | Builds |
-|---|---|
-| `ps2-pal` (`ps2`, `pal`) | the PAL PS2 executable and disc image |
-| `ps2-ntsc` (`ntsc`) | the NTSC 1.02 PS2 executable and disc image |
-| `linux-x64-release` (`linux`) | the optimized Linux port, in `port/build/pc-release` |
-| `linux-x64` (`linux-x64-debug`) | the Debug Linux port, in `port/build/pc` |
-| `macos-arm64-release` (`macos`) | the optimized Apple Silicon port, in `port/build/macos-arm64-release` |
-| `macos-arm64` | the Debug Apple Silicon port, in `port/build/macos-arm64` |
-| `windows-x64-release` (`windows`) | the optimized Windows port |
-| `windows-x64` | the Debug Windows port |
+## How it runs
 
-With no configuration, the scripts use the port for the host's operating system. PS2 builds must name
-their configuration. The Linux and PS2 configurations build in a container, which needs Docker or Podman;
-the macOS and Windows ports build on the host, with the dependencies in `docs/MACOS.md` and `docs/WINDOWS.md` installed.
+Measured on a PS4 over a long session, in the Divine Beast Cave: an average of 59.9 ticks a second, with 99.5% of 1,292 half-minute windows at 55 or better. Logos are skipped and loading is shortened by default. Add an empty file named `ps4_show_intro` or `ps4_retail_loading` to `/data/darkcloud/` to get the original behaviour. The other options are listed in [`ps4/README.md`](ps4/README.md).
 
-`CLEAN=1` discards the configuration's build directory before building, and `JOBS=N` sets the number of
-parallel jobs. The configurations and their settings are listed in `kazarov.conf` and `tools/kazarov/README.md`.
+Your saves are in `/data/darkcloud/save` and stay on the console, including when you update the package.
 
-## The PC port
+## Known issues (v0.1.0, first preview)
 
-`PLATFORM=PC` builds the game's code as a native Linux, macOS and Windows program on SDL3 and Vulkan
-(`docs/PC.md`, `docs/MACOS.md`). On Linux it is packaged as a Flatpak, built by CI as
-`chronicle.flatpak`; `docs/FLATPAK.md` covers installing it. It needs your own PAL disc: the first
-start asks for the disc image and extracts the game's files from it.
+* **Do not use Remote Play or a screen recorder while you play.** It takes memory the game needs, and the game can show black patches and slow cutscenes.
+* Some menu backdrops may not draw. The graphics driver's memory pool is small, and the game says so in its log when it runs out.
+* Shadows are drawn with a 16-bit depth buffer, the most the PS4 driver gives. Rarely, a shadow may look wrong (dark circles around Atla and chests have been seen once; this is not confirmed).
+* Only the USA disc has been run on a console.
 
-### Translations and the message font
+Please report problems with the log file (`/data/darkcloud/ps4_boot.log`) attached.
 
-Game text can come from JSON language files (one per language, laid out as Minecraft's are) and be drawn from a
-TrueType font so it stays sharp at any window size. The first start writes the language files from your own
-game data; the Dark Cloud community font is bundled. See `docs/LOCALIZATION.md`.
+## About the package
 
-## Repository layout
+The package carries two **unmodified Sony system libraries**, `libScePigletv2VSH.sprx` and `libSceShaccVSH.sprx`: the OpenGL ES driver and shader compiler the PS4 draws with. They are included so that the package works with no extra steps. They are also kept in this repository under [`ps4/redist-sony/signed/`](ps4/redist-sony/signed/) so you can build the same package yourself. Their hashes are in [`PACKAGE-CONTENTS.md`](ps4/docs/PACKAGE-CONTENTS.md).
 
-- `ps2/src`, `ps2/include`: matching game sources and headers.
-- `ps2/config`, `ps2/asm`: per-region split configuration and generated reference assembly.
-- `ps2/CMakeLists.txt`, `ps2/cmake`: PS2 build rules.
-- `port/src`, `port/include`: native replacements and platform support.
-- `port/CMakeLists.txt`, `port/flatpak`: native build rules and Linux packaging.
-- `scripts`: build, port and tooling scripts.
-- `tools`: compilers, the Kazarov build system (`tools/kazarov`) and helpers.
-- `rom`: disc images and their checksums.
+## Building it yourself
 
-## Documentation
+You need the [OpenOrbis toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain), LLVM and CMake. Clone with `--recursive`, build the PS4 target, then make the package:
 
-Source documentation is available on [GitHub Pages](https://themoonpeople.github.io/Chronicle/).
+```
+git clone --recursive https://github.com/odiecay/chronicle-ps4
+cmake --build port/build/ps4
+python ps4/package.py --bundle-sprx ps4/redist-sony/signed
+```
+
+The full steps, including how the toolchain is set up, are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme, with its notes on the decompilation itself, is [`README-CHRONICLE.md`](README-CHRONICLE.md).
+
+## Credits
+
+* The **Chronicle** team ([TheMoonPeople](https://github.com/TheMoonPeople)) for the decompilation and the Kazarov build system. This port stands on their work.
+* **Level-5** made Dark Cloud. This project is not affiliated with Level-5 or Sony.
+* The **Ship of Harkinian PS4 port** showed how to do native PS4 homebrew with Piglet, and its install guide is the reference for the Sony modules.
+* [OpenOrbis](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) and [GoldHEN](https://github.com/GoldHEN/GoldHEN).
+* **FlameCheese** for the 8-bit Dark Cloud remixes played during setup.
+
+Chronicle and Kazarov keep their own terms (Kazarov is MIT). The PS4 layer in `ps4/` is MIT, see [`ps4/LICENSE-ps4-port`](ps4/LICENSE-ps4-port).
