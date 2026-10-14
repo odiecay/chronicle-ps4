@@ -1,6 +1,6 @@
 # What is inside the package
 
-`DarkCloud-PS4-01.00.pkg` holds 24 files, listed here with their SHA-256 so you can check them. This list was made
+`Chronicle-PS4-v0.1.0.pkg` holds 24 files, listed here with their SHA-256 so you can check them. This list was made
 by unpacking the finished package, not from the build folder. It contains **no game data** and no disc content: that
 comes from your own disc image the first time you start it.
 

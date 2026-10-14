@@ -2,7 +2,7 @@
 
 **Play Dark Cloud on your jailbroken PS4.** A native port, not an emulator: 1080p, 60 frames a second.
 
-## [⬇ Download the latest release](../../releases/latest)
+## [⬇ Download the latest release](https://github.com/odiecay/chronicle-ps4/releases/latest)
 
 [Watch it running](https://www.youtube.com/watch?v=EqCQ85O4dbw)
 
@@ -10,7 +10,7 @@
 
 You need a PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN), your own Dark Cloud (USA) disc image as an `.iso`, and a USB drive.
 
-1. On the USB drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put `DarkCloud-PS4-01.00.pkg` (from the download) in the drive's main folder.
+1. On the USB drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put `Chronicle-PS4-v0.1.0.pkg` (from the download) in the drive's main folder.
 2. Plug the drive into the PS4 and install the package with GoldHEN's **Package Installer**.
 3. Start **Chronicle PS4 (Dark Cloud)** from the home screen and leave the drive plugged in.
 
@@ -21,7 +21,6 @@ The game sets itself up from your disc image. A few minutes later it says it's r
 ## Good to know
 
 * **No game data is included.** You bring your own disc image.
-* **Don't run Remote Play or a screen recorder while you play.** It takes memory the game needs.
 * Tested on firmware 13.52 with the **USA NTSC 1.02** disc. Other discs haven't been tried on a console.
 * The package contains two unmodified Sony system files, so it works with no extra steps. [See exactly what's inside.](ps4/docs/PACKAGE-CONTENTS.md)
 
@@ -39,16 +38,7 @@ Please report problems with the log attached: `/data/darkcloud/ps4_boot.log`.
 
 ## For developers
 
-Everything needed to build the package is in this one repository, including the renderer and the two Sony modules. Install the [OpenOrbis toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain), then:
-
-```
-git clone https://github.com/odiecay/chronicle-ps4
-cd chronicle-ps4
-cmake --build port/build/ps4
-python ps4/package.py --bundle-sprx ps4/redist-sony/signed
-```
-
-How it's put together, the options and the measurements are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme is [`README-CHRONICLE.md`](README-CHRONICLE.md).
+Everything needed to build the package is in this one repository, including the renderer and the two Sony modules, and a plain `git clone` is enough. The build steps, tested on a fresh clone, are in **[`ps4/docs/BUILDING.md`](ps4/docs/BUILDING.md)**. How the port is put together, the options and the measurements are in [`ps4/README.md`](ps4/README.md). The original Chronicle readme is [`README-CHRONICLE.md`](README-CHRONICLE.md).
 
 ## Credits
 

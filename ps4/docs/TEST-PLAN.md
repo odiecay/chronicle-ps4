@@ -1,6 +1,6 @@
 # Chronicle PS4 (Dark Cloud): pre-release test plan
 
-Build under test: package `2041d294…` (the `DarkCloud-PS4-01.00.pkg` on the USB stick and in `/data/pkg/`), 14 October 2026.
+Build under test: package `2041d294…` (the `Chronicle-PS4-v0.1.0.pkg` on the USB stick and in `/data/pkg/`), 14 October 2026.
 Console: PS4, firmware 13.52, GoldHEN (FTP 2121). Disc: Dark Cloud USA, NTSC 1.02 (`Dark Cloud (NTSC).iso`).
 
 ## The control
@@ -104,7 +104,7 @@ Setup: `data` present (restore `data.bak`).
 
 ## USB trial runs (the next session)
 
-The stick is laid out as the instructions say: `DarkCloud-PS4-01.00.pkg` in the root, the ISO in `darkcloud/`.
+The stick is laid out as the instructions say: `Chronicle-PS4-v0.1.0.pkg` in the root, the ISO in `darkcloud/`.
 Before each run the console is reset by me (game closed first): `data` set aside, and the console's own ISO renamed to `.iso.bak` unless the run says otherwise. Latest package on the stick and in `/data/pkg`: `9878e57f…`.
 
 | Run | Console state before | Plug in | What to do | What I check afterwards |
@@ -134,8 +134,7 @@ Record what actually happens in the results table above, and copy the confirmed 
 | T3 FTP route, clean re-run with fixed extractor (x2) | 14 Oct 20:58, 21:09 | PASS | Fresh setup twice from the ISO: 5,234 files identical to the repaired set, no repair screen, version note written, Divine Beast Cave entered both times, no crash | `[setup] done, starting the game` |
 | U1 USB route, uninterrupted (+ part of U8) | 14 Oct 21:25 | PASS | Stick only source: loopback FTP bridge reached the drive from inside the game, copied the ISO to `setup-copy.part`, unpacked from it, deleted the copy; 5,234 files identical to the FTP-route install; version note written; cave entered; first screens readable, did-you-know cards name Dark Cloud, touch pad icon shows in the Georama menu. Feedback: the two stages were a little ambiguous, so the headers now say STEP 1 OF 2 / STEP 2 OF 2 | `[setup] ftp: reached, 1 disc image(s) on USB`, `copying /mnt/usb0/...`, `extracted ...` |
 | Blind test (release package `4f46f233…`, fresh install from the USB, new player's defaults) | 14 Oct, evening | PASS | Setup from the stick, then played; held 60 ticks a second (mean 59.9, 99.5% of 1,292 half-minute windows at 55 or better) | boot log |
-| New game opening and first field, 1080p | 15 Oct 00:5x | PASS without a recorder | A first run with Remote Play recording showed a slow cutscene and black patches on distant cliffs: the log showed the memory pool full and 44,870 framebuffer errors. Without the recorder: 0 memory errors, 0 framebuffer errors, 17.4 ms average over about 9,600 frames | boot log |
-| Slow cinematics and dungeons on a fresh install | 15 Oct 01:1x | FIXED | A fresh game used the default config, where soft focus is on. Heavy scenes then ran at 12 to 20 ticks a second (1,300 to 2,500 draws a tick, 50 to 80 ms of game-side work). The tested config has soft focus off. With the tested config restored: 572 windows, mean 59.6 ticks a second, 97.7% at 55 or better, and the heaviest scenes (2,671 draws a tick) at 60. The port now writes that config on the first run | boot log |
+| Slow cinematics and dungeons on a fresh install | 15 Oct 01:1x | FIXED | A fresh game used the default config, where soft focus is on. Heavy scenes then ran at 12 to 20 ticks a second (1,300 to 2,500 draws a tick, 50 to 80 ms of game-side work). The tested config has soft focus off. With the tested config restored: 572 windows, mean 59.6 ticks a second, 97.7% at 55 or better, and the heaviest scenes (2,671 draws a tick) at 60. Earlier theories (the memory pool, 720p, a screen recorder) were not the cause. The port now writes that config on the first run | boot log |
 | Still to do | | | T1 USB (bridge), T3 clean re-run with the fixed extractor, T4, T5, T6, T7, T9, T11 | |
 
 ## What to send me after a run

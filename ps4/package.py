@@ -20,10 +20,14 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-RUNTIME = Path(os.environ['LOCALAPPDATA']) / 'Cole/PS4'
-OO = RUNTIME / 'tools/OpenOrbis/OpenOrbis/PS4Toolchain'
+# Where the tools are. Set OO_PS4_TOOLCHAIN to the OpenOrbis PS4 toolchain folder (the one holding bin/windows) and
+# DOTNET to a dotnet runtime (the program, or leave it unset to use the one on PATH). With neither set, the layout
+# the author's machine uses is tried: %LOCALAPPDATA%/Cole/PS4/tools/....
+RUNTIME = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Cole/PS4'
+OO = Path(os.environ['OO_PS4_TOOLCHAIN']) if os.environ.get('OO_PS4_TOOLCHAIN') else RUNTIME / 'tools/OpenOrbis/OpenOrbis/PS4Toolchain'
 BIN = OO / 'bin/windows'
-DOTNET = RUNTIME / 'tools/dotnet/dotnet.exe'
+_dotnet = os.environ.get('DOTNET') or shutil.which('dotnet')
+DOTNET = Path(_dotnet) if _dotnet else RUNTIME / 'tools/dotnet/dotnet.exe'
 ELF = ROOT / 'port/build/ps4/darkcloud.elf'
 TITLE = 'Chronicle PS4 (Dark Cloud)'
 TITLE_ID = 'DCLD00001'
@@ -43,7 +47,7 @@ args = parser.parse_args()
 
 for path in (ELF, DOTNET):
     if not path.is_file():
-        raise SystemExit(f'Missing {path}; build the PS4 target first.')
+        raise SystemExit(f'Missing {path}: build the PS4 target first, and set OO_PS4_TOOLCHAIN and DOTNET if your tools are not in the default place.')
 header = ELF.read_bytes()[:64]
 if header[:6] != b'\x7fELF\x02\x01' or int.from_bytes(header[18:20], 'little') != 62:
     raise SystemExit('Input must be a little-endian x86-64 ELF.')
@@ -53,8 +57,8 @@ env['OO_PS4_TOOLCHAIN'] = str(OO)
 env['DOTNET_ROOT'] = str(DOTNET.parent)
 env['DOTNET_ROLL_FORWARD'] = 'LatestMajor'
 env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
-stage_root = RUNTIME / 'package-staging'
-stage_root.mkdir(exist_ok=True)
+stage_root = Path(tempfile.gettempdir()) / 'chronicle-ps4-package-staging'
+stage_root.mkdir(parents=True, exist_ok=True)
 stage = Path(tempfile.mkdtemp(prefix='dcld-', dir=stage_root))
 output = HERE / 'out'
 output.mkdir(exist_ok=True)

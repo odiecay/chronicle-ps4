@@ -10,7 +10,7 @@ The package is the port, not the game. The first time you start it, a setup scre
 
 ## The easy way: a USB drive
 
-1. On the drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put `DarkCloud-PS4-01.00.pkg` in the drive's main folder.
+1. On the drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put `Chronicle-PS4-v0.1.0.pkg` in the drive's main folder.
 2. Plug the drive into the PS4.
 3. Open GoldHEN's Package Installer (Settings > GoldHEN > Package Installer, or Debug Settings > Game > Package Installer) and install the package.
 4. Start **Chronicle PS4 (Dark Cloud)** from the home screen and leave the drive plugged in.
