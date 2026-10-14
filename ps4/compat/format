@@ -1,0 +1,194 @@
+#pragma once
+
+// A std::format for libc++ 11: "{}" and "{:[[fill]align][0][width][.precision][type]}" over integers, chars,
+// floats, strings and C strings, which is every specifier Chronicle uses ({}, {:02}, {:8}, {:10}, {:g},
+// {:.Nf}, {:.Ng}). No positional arguments, no sign or alternate forms.
+
+#include <cstdio>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+namespace std {
+
+namespace format_detail {
+
+struct Spec {
+    char type = 0;      // 'f', 'g' or 0 for the default
+    int  precision = -1;
+    int  width = 0;
+    bool zero = false;  // pad numbers with zeros after the sign
+    char align = 0;     // '<', '>', '^' or 0 for the type's default
+    char fill = ' ';
+};
+
+inline Spec Parse(std::string_view spec) {
+    Spec   out;
+    size_t i = 0;
+    if (i < spec.size() && spec[i] == ':') {
+        ++i;
+    }
+    auto is_align = [](char c) { return c == '<' || c == '>' || c == '^'; };
+    if (i + 1 < spec.size() && is_align(spec[i + 1])) {
+        out.fill = spec[i];
+        out.align = spec[i + 1];
+        i += 2;
+    } else if (i < spec.size() && is_align(spec[i])) {
+        out.align = spec[i];
+        ++i;
+    }
+    if (i < spec.size() && spec[i] == '0') {
+        out.zero = true;
+        ++i;
+    }
+    while (i < spec.size() && spec[i] >= '0' && spec[i] <= '9') {
+        out.width = out.width * 10 + (spec[i] - '0');
+        ++i;
+    }
+    if (i < spec.size() && spec[i] == '.') {
+        ++i;
+        int p = 0;
+        while (i < spec.size() && spec[i] >= '0' && spec[i] <= '9') {
+            p = p * 10 + (spec[i] - '0');
+            ++i;
+        }
+        out.precision = p;
+    }
+    if (i < spec.size()) {
+        out.type = spec[i];
+    }
+    return out;
+}
+
+// Appends text to out, padded to the spec's width: numbers to the right (zeros after the sign with a 0 flag),
+// everything else to the left, as std::format does unless an alignment says otherwise.
+inline void Pad(std::string &out, const std::string &text, const Spec &spec, bool numeric) {
+    const size_t width = static_cast<size_t>(spec.width);
+    if (text.size() >= width) {
+        out += text;
+        return;
+    }
+    const size_t gap = width - text.size();
+    if (numeric && spec.zero && spec.align == 0) {
+        const size_t sign = (!text.empty() && (text[0] == '-' || text[0] == '+')) ? 1 : 0;
+        out.append(text, 0, sign);
+        out.append(gap, '0');
+        out.append(text, sign, std::string::npos);
+        return;
+    }
+    char align = spec.align != 0 ? spec.align : (numeric ? '>' : '<');
+    if (align == '>') {
+        out.append(gap, spec.fill);
+        out += text;
+    } else if (align == '^') {
+        out.append(gap / 2, spec.fill);
+        out += text;
+        out.append(gap - gap / 2, spec.fill);
+    } else {
+        out += text;
+        out.append(gap, spec.fill);
+    }
+}
+
+template <class T>
+void Append(std::string &out, const Spec &spec, const T &value) {
+    using D = std::decay_t<T>;
+    char buffer[64];
+    if constexpr (std::is_same_v<D, bool>) {
+        Pad(out, value ? "true" : "false", spec, false);
+    } else if constexpr (std::is_same_v<D, char>) {
+        Pad(out, std::string(1, value), spec, false);
+    } else if constexpr (std::is_floating_point_v<D>) {
+        const char *form = "%g";
+        if (spec.type == 'f') {
+            form = spec.precision >= 0 ? "%.*f" : "%f";
+        } else if (spec.type == 'g') {
+            form = spec.precision >= 0 ? "%.*g" : "%g";
+        } else if (spec.precision >= 0) {
+            form = "%.*g";
+        }
+        int n = spec.precision >= 0 ? std::snprintf(buffer, sizeof(buffer), form, spec.precision, static_cast<double>(value))
+                                    : std::snprintf(buffer, sizeof(buffer), form, static_cast<double>(value));
+        Pad(out, std::string(buffer, n > 0 ? static_cast<size_t>(n) : 0), spec, true);
+    } else if constexpr (std::is_integral_v<D>) {
+        int n;
+        if (spec.type == 'x' || spec.type == 'X') {
+            n = std::snprintf(buffer, sizeof(buffer), spec.type == 'x' ? "%llx" : "%llX", static_cast<unsigned long long>(value));
+        } else if constexpr (std::is_signed_v<D>) {
+            n = std::snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(value));
+        } else {
+            n = std::snprintf(buffer, sizeof(buffer), "%llu", static_cast<unsigned long long>(value));
+        }
+        Pad(out, std::string(buffer, n > 0 ? static_cast<size_t>(n) : 0), spec, true);
+    } else if constexpr (std::is_convertible_v<const T &, std::string_view>) {
+        std::string text = std::string(std::string_view(value));
+        if (spec.precision >= 0 && text.size() > static_cast<size_t>(spec.precision)) {
+            text.resize(static_cast<size_t>(spec.precision));
+        }
+        Pad(out, text, spec, false);
+    } else {
+        static_assert(sizeof(T) == 0, "std::format shim: unsupported argument type");
+    }
+}
+
+inline void Walk(std::string &, std::string_view fmt, size_t pos) {
+    (void)fmt;
+    (void)pos;
+}
+
+// Copies fmt up to the next field and returns the field's spec text; false at the end.
+inline bool NextField(std::string &out, std::string_view fmt, size_t &pos, std::string_view &spec) {
+    while (pos < fmt.size()) {
+        char c = fmt[pos];
+        if (c == '{') {
+            if (pos + 1 < fmt.size() && fmt[pos + 1] == '{') {
+                out += '{';
+                pos += 2;
+                continue;
+            }
+            size_t close = fmt.find('}', pos);
+            spec = fmt.substr(pos + 1, close - pos - 1);
+            pos = close + 1;
+            return true;
+        }
+        if (c == '}' && pos + 1 < fmt.size() && fmt[pos + 1] == '}') {
+            out += '}';
+            pos += 2;
+            continue;
+        }
+        out += c;
+        ++pos;
+    }
+    return false;
+}
+
+inline void Format(std::string &out, std::string_view fmt, size_t &pos) {
+    std::string_view spec;
+    while (NextField(out, fmt, pos, spec)) {
+    }
+}
+
+template <class T, class... Rest>
+void Format(std::string &out, std::string_view fmt, size_t &pos, const T &first, const Rest &...rest) {
+    std::string_view spec;
+    if (!NextField(out, fmt, pos, spec)) {
+        return;
+    }
+    Append(out, Parse(spec), first);
+    Format(out, fmt, pos, rest...);
+}
+
+} // namespace format_detail
+
+template <class... Args>
+using format_string = std::string_view;
+
+template <class... Args>
+std::string format(std::string_view fmt, const Args &...args) {
+    std::string out;
+    size_t      pos = 0;
+    format_detail::Format(out, fmt, pos, args...);
+    return out;
+}
+
+} // namespace std
