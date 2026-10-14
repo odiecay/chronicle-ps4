@@ -33,6 +33,9 @@ void ResetSaveKeepingConfig(CSaveData &save);
 // dungeon, its loader) would have. GameSetFastLoad cuts the loading screen's holds and fades to a
 // few ticks.
 bool GameSetJump(const char *spec);
+// Starts at the title screen instead of the language select and the attract movie (the logos), without the
+// debug mode a jump turns on. DC_SKIP_INTRO=1 asks for it.
+void GameSkipIntro();
 void GameSetFastLoad(bool fast);
 
 // Test hook: the item and weapon numbers (ps2/include/itemdata.hpp's ITEM_*) the party is given,

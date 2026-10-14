@@ -54,8 +54,8 @@ std::vector<int> SaveSlotFiles() {
     std::vector<int> files;
     std::error_code  error;
     for (const fs::directory_entry &entry : fs::directory_iterator(SaveSlotsRoot(), error)) {
-        const std::u8string name = entry.path().filename().u8string();
-        int                 file_no = SaveSlotFileNo(std::string_view(reinterpret_cast<const char *>(name.data()), name.size()));
+        const std::string name = PathsDisplay(entry.path().filename());
+        int               file_no = SaveSlotFileNo(name);
         if (file_no >= 0) {
             files.push_back(file_no);
         }

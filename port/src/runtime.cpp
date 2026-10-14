@@ -26,7 +26,7 @@ unsigned int g_rand_state = 1;
 }
 
 // glibc declares these noexcept; Apple's libc and the Windows CRT do not.
-#if defined(__APPLE__) || defined(_WIN32)
+#if defined(__APPLE__) || defined(_WIN32) || defined(__PS4__)
 #define LIBC_NOEXCEPT
 #else
 #define LIBC_NOEXCEPT noexcept

@@ -3,6 +3,11 @@
 
 #include <charconv>
 #include <cstdint>
+#include <chrono>
+#ifdef __PS4__
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -74,8 +79,32 @@ const fs::path *Lookup(std::string_view path) {
 // The drive wrote whole sectors, so up to 2047 bytes past the file were overwritten and callers
 // sized their buffers for that; the tail is zeroed rather than left as whatever was there.
 int ReadWhole(const fs::path &file, void *buffer) {
+#ifdef __PS4__
+    const auto read_started = std::chrono::steady_clock::now();
+#endif
     std::error_code error;
     std::uintmax_t  size = fs::file_size(file, error);
+#ifdef __PS4__
+    // One read() into the destination: no stream buffering in between.
+    int descriptor = ::open(file.c_str(), O_RDONLY);
+    if (error || descriptor < 0 || size > INT32_MAX) {
+        std::fprintf(stderr, "cannot read %s\n", PathsDisplay(file).c_str());
+        std::abort();
+    }
+    std::uintmax_t got = 0;
+    while (got < size) {
+        const ssize_t part = ::read(descriptor, static_cast<char *>(buffer) + got, size - got);
+        if (part <= 0) {
+            break;
+        }
+        got += static_cast<std::uintmax_t>(part);
+    }
+    ::close(descriptor);
+    if (got != size) {
+        std::fprintf(stderr, "short read on %s\n", PathsDisplay(file).c_str());
+        std::abort();
+    }
+#else
     std::ifstream   stream(file, std::ios::binary);
     if (error || !stream || size > INT32_MAX) {
         std::fprintf(stderr, "cannot read %s\n", PathsDisplay(file).c_str());
@@ -86,8 +115,19 @@ int ReadWhole(const fs::path &file, void *buffer) {
         std::fprintf(stderr, "short read on %s\n", PathsDisplay(file).c_str());
         std::abort();
     }
+#endif
     std::size_t padded = dcdata::SectorsFor(size) * dcdata::kSector;
     std::memset(static_cast<char *>(buffer) + size, 0, padded - size);
+#ifdef __PS4__
+    {
+        // Reads that take noticeable time, to see what a stall is waiting on.
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - read_started).count();
+        if (ms >= 20) {
+            std::fprintf(stderr, "[PS4] slow read: %s, %.2f MB in %lld ms\n", PathsDisplay(file).c_str(),
+                         static_cast<double>(size) / 1048576.0, static_cast<long long>(ms));
+        }
+    }
+#endif
     return static_cast<int>(size);
 }
 
@@ -247,11 +287,20 @@ PORT_OVERRIDE int LoadFileBG(char *name, u_long128 *buffer, int *out_size) {
         printf("/*/*/*/*/not 64byte align at %p %s\n", static_cast<void *>(buffer), name);
     }
     const fs::path *file = Lookup(name);
+    if (std::getenv("DC_TRACE_FILES") != nullptr) {
+        std::fprintf(stderr, "LoadFileBG %s -> %s\n", name, file ? PathsDisplay(*file).c_str() : "NOT FOUND");
+    }
     if (!file) {
+#ifdef __PS4__
+        std::fprintf(stderr, "[PS4] file not found: %s (%zu files indexed)\n", name, data_index.size());
+#endif
         return 0;
     }
     int size = ReadWhole(*file, buffer);
     Localized(name, buffer, &size);
+#ifdef __PS4__
+    std::fprintf(stderr, "[PS4] loaded %s (%d bytes, slot %d)\n", name, size, static_cast<int>(info - bg_read_info));
+#endif
     std::snprintf(info->name, sizeof info->name, "%s", name);
     info->busy = true;
     info->id = 1;
@@ -270,6 +319,11 @@ PORT_OVERRIDE BG_READ_INFO *GetReadBGFile(int index) {
     if (index < 0 || index >= 32) {
         return 0;
     }
+#ifdef __PS4__
+    if (!bg_read_info[index].busy) {
+        std::fprintf(stderr, "[PS4] GetReadBGFile(%d): slot is not in use\n", index);
+    }
+#endif
     return bg_read_info[index].busy ? &bg_read_info[index] : 0;
 }
 

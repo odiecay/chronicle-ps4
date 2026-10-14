@@ -1,6 +1,7 @@
 #include "memorycardaccess.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -259,6 +260,10 @@ PORT_OVERRIDE int CMemoryCardAccess::SaveToMc(int file_no) {
 
     if (result == FilesResult::kWritten) {
         result = FilesWrite(SaveSlotPath(file_no), this->save_buffer, kImageSize, !SaveSlotNew);
+#ifdef __PS4__
+        std::fprintf(stderr, "[PS4] save slot %d: write %s (errno %d)\n", file_no + 1,
+                     result == FilesResult::kWritten ? "ok" : result == FilesResult::kExists ? "exists" : "FAILED", errno);
+#endif
     }
 
     if (result != FilesResult::kWritten) {

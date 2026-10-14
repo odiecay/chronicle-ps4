@@ -195,6 +195,8 @@ struct Jump {
 };
 
 Jump g_jump;
+// A jump made by GameSkipIntro leaves DebugMode as the config has it.
+bool g_jump_is_skip = false;
 bool g_fast_load;
 int g_developer_return_mode = GAME_MODE_TITLE;
 int g_developer_return_map = 800;
@@ -562,6 +564,14 @@ bool GameSetGive(const char *list) {
     return !g_give.empty();
 }
 
+void GameSkipIntro() {
+    Jump jump;
+    jump.set = true;
+    jump.mode = GAME_MODE_TITLE;
+    g_jump = jump;
+    g_jump_is_skip = true;
+}
+
 bool GameSetJump(const char *spec) {
     std::string_view text = spec;
     std::string_view name = text.substr(0, text.find(':'));
@@ -685,11 +695,45 @@ void GameSetPresentSettings(const GamePresentSettings &settings) {
     g_fps.on = settings.show_fps;
 }
 
+#ifdef __PS4__
+// Counted for ps4/src/main_ps4.cpp's stall sampler.
+extern "C" volatile unsigned long g_ps4_tick_count = 0;
+#endif
+
 void GameRenderTick(gfx::DisplayListRef list) {
     PresentClock::time_point start = PresentClock::now();
     gfx::RenderList(*list, 1.0f, {.canonical = true});
     g_stats.canonical_seconds += SecondsSince(start);
     g_stats.ticks++;
+#ifdef __PS4__
+    {
+        g_ps4_tick_count++;
+        // The console's log of how the game's own ticks go: how many a second, what the canonical render of a
+        // tick costs, and how much of the time between two ticks the game's logic (and anything else) takes.
+        static PresentClock::time_point window_start = start;
+        static PresentClock::time_point previous_end = start;
+        static double                   render_total = 0.0;
+        static double                   logic_total = 0.0;
+        static int                      ticks = 0;
+        const PresentClock::time_point  end = PresentClock::now();
+        render_total += std::chrono::duration<double>(end - start).count();
+        logic_total += std::chrono::duration<double>(start - previous_end).count();
+        if (std::chrono::duration<double>(start - previous_end).count() > 0.25) {
+            std::fprintf(stderr, "[PS4] stall: %.0f ms between ticks\n",
+                         std::chrono::duration<double>(start - previous_end).count() * 1000.0);
+        }
+        previous_end = end;
+        if (++ticks == 30) {
+            const double elapsed = std::chrono::duration<double>(end - window_start).count();
+            std::fprintf(stderr, "[PS4] ticks: %.1f/s, per tick: canonical render %.1f ms, everything else %.1f ms, draws %u\n",
+                         ticks / elapsed, render_total * 1000.0 / ticks, logic_total * 1000.0 / ticks,
+                         static_cast<unsigned>(g_stats.last_draws));
+            window_start = end;
+            render_total = logic_total = 0.0;
+            ticks = 0;
+        }
+    }
+#endif
     gfx::DisplayListStats counts = gfx::ListStats(*list);
     g_stats.mesh_draws += counts.mesh_draws;
     g_stats.keyed_mesh_draws += counts.keyed_mesh_draws;
@@ -819,7 +863,7 @@ int RunGame(int argc, char **argv) {
     g_save_data.Initialize();
     GlobalNameInit();
 
-    if (g_jump.set) {
+    if (g_jump.set && !g_jump_is_skip) {
         DebugMode = 1;
     }
     for (int tick = 0; tick < kWarmUpTicks && !g_jump.set; ++tick) {

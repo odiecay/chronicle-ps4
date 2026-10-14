@@ -14,7 +14,14 @@ if(NOT CMAKE_CXX_COMPILER)
 endif()
 enable_language(CXX)
 
-set(CMAKE_CXX_STANDARD 26)
+if(PS4)
+    # OpenOrbis' clang is LLVM 18, which spells the newest standard c++2b; ps4/compat supplies the library.
+    set(CMAKE_CXX_STANDARD 23)
+    set(DC_PS4_DIR ${CMAKE_SOURCE_DIR}/ps4)
+    enable_language(C)
+else()
+    set(CMAKE_CXX_STANDARD 26)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -39,6 +46,10 @@ set(PORT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 file(GLOB_RECURSE PS2_SOURCES CONFIGURE_DEPENDS RELATIVE ${PS2_DIR} ${PS2_DIR}/*.cpp)
 file(GLOB_RECURSE PORT_SOURCES CONFIGURE_DEPENDS ${PORT_DIR}/*.cpp)
 list(FILTER PORT_SOURCES EXCLUDE REGEX "/tests/")
+if(PS4)
+    # The disc extractor and its first-run screen run on a PC; the console reads the extracted data.
+    list(FILTER PORT_SOURCES EXCLUDE REGEX "/platform/firstrun\\.cpp$")
+endif()
 # Temporary files beside a source are not units.
 list(FILTER PS2_SOURCES EXCLUDE REGEX "(^|/)tmp[^/]*$")
 
@@ -108,11 +119,21 @@ target_include_directories(dc_options INTERFACE
     ${CMAKE_SOURCE_DIR}/port/include ${KZ_ROOT}/include ${CMAKE_SOURCE_DIR}/ps2/include ${CMAKE_SOURCE_DIR}/ps2/include/sce)
 target_compile_options(dc_options INTERFACE
     "SHELL:-include \"${CMAKE_SOURCE_DIR}/port/include/port.h\""
-    -fms-extensions -ffunction-sections -fdata-sections
+    -fms-extensions
     -Wno-register -Wno-c++11-narrowing -Wno-return-mismatch)
+# One section per function and variable lets the linker drop what is unused, but the PS4's link script
+# sends the resulting .data.<name> sections to a second read-write segment, which create-fself rejects.
+if(NOT PS4)
+    target_compile_options(dc_options INTERFACE -ffunction-sections -fdata-sections)
+endif()
 # arm64 clang fuses a*b+c into one rounding by default; x86-64 has no FMA in its
 # baseline. Off everywhere so the game's arithmetic rounds the same on both.
 target_compile_options(dc_options INTERFACE -ffp-contract=off)
+
+if(PS4)
+    # LLVM 18 does not know -Wno-return-mismatch; a missing return is an error there by default.
+    target_compile_options(dc_options INTERFACE -Wno-return-type -Wno-error=return-type)
+endif()
 
 if(WIN32 AND (NOT MINGW OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     message(FATAL_ERROR "The Windows build requires clang/llvm-mingw")
@@ -192,7 +213,11 @@ target_compile_options(dc_port PRIVATE -Wall -Wno-mismatched-tags -Wno-unused-la
 # the names that are not aliases, EditGaijiTbl among them. ItemPutListTbl12_bytes
 # is not one: port/include/stubs/dngstatusdata.hpp turns GetItem's read through
 # it into a WeaponList lookup.
-if(WIN32)
+if(PS4)
+    # The PS4 link rule (ps4-toolchain.cmake) calls ld.lld itself: plain lld flags, no -Wl, driver prefix.
+    set(DC_LINK_OPTIONS --gc-sections --error-limit=0 --defsym=draw_rect=draw_rect_store
+        --defsym=WorkBuffer__2=WorkBuffer)
+elseif(WIN32)
     # The two aliases are /alternatename directives in port/src/linknames.cpp.
     set(DC_LINK_OPTIONS -fuse-ld=lld -Wl,--gc-sections -Wl,--error-limit=0)
 elseif(APPLE)
@@ -214,6 +239,14 @@ endfunction()
 
 add_executable(darkcloud ${PORT_DIR}/main.cpp)
 set_target_properties(darkcloud PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+if(PS4)
+    # ps4/src/main_ps4.cpp owns the process entry point and runs the port's main on a large stack.
+    set_source_files_properties(${PORT_DIR}/main.cpp PROPERTIES COMPILE_DEFINITIONS main=DarkCloudMain)
+    # The two C files are the C library's heap and thread-exit support; they take none of dc_options.
+    add_library(dc_ps4_c OBJECT ${DC_PS4_DIR}/src/ps4_heap.c ${DC_PS4_DIR}/src/ps4_compat.c)
+    target_sources(darkcloud PRIVATE ${DC_PS4_DIR}/src/main_ps4.cpp $<TARGET_OBJECTS:dc_ps4_c>)
+    target_include_directories(darkcloud PRIVATE ${DC_PS4_DIR}/src)
+endif()
 dc_link_game(darkcloud)
 if(WIN32)
     target_link_options(darkcloud PRIVATE -municode)
@@ -244,8 +277,13 @@ install(DIRECTORY glyphs/ DESTINATION ${CMAKE_INSTALL_BINDIR}/glyphs)
 
 # The tests use an installed GoogleTest, or fetch one at configure time; a build with neither turns them off.
 option(DC_BUILD_TESTS "Build darkcloud_tests" ON)
+if(PS4)
+    set(DC_BUILD_TESTS OFF)
+endif()
 if(DC_BUILD_TESTS)
     enable_testing()
     add_subdirectory(src/tests)
 endif()
-add_subdirectory(${CMAKE_SOURCE_DIR}/tools/dcdata ${CMAKE_BINARY_DIR}/tools/dcdata)
+if(NOT PS4)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/tools/dcdata ${CMAKE_BINARY_DIR}/tools/dcdata)
+endif()

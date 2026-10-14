@@ -53,7 +53,8 @@ inline std::string FoldPath(std::string_view path) {
     std::string out;
     out.reserve(path.size());
     for (char c : path) {
-#if defined(__APPLE__) || defined(_WIN32)
+// The PS4's data is extracted on a PC and copied over, so its file names carry the same escapes.
+#if defined(__APPLE__) || defined(_WIN32) || defined(__PS4__)
         if (static_cast<unsigned char>(c) > 0x7F) {
             constexpr char kHex[] = "0123456789abcdef";
             out += '%';

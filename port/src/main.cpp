@@ -380,6 +380,10 @@ int Run(int argc, const char **argv) {
         std::fprintf(stderr, "bad --give: %s\n", options.give);
         std::exit(kExitUsage);
     }
+    if (const char *skip = std::getenv("DC_SKIP_INTRO");
+        skip != nullptr && *skip != '\0' && *skip != '0' && (options.jump == nullptr || *options.jump == '\0')) {
+        GameSkipIntro();
+    }
     if (options.jump != nullptr && *options.jump != '\0' && !GameSetJump(options.jump)) {
         std::fprintf(stderr, "bad --jump: %s\n", options.jump);
         std::exit(kExitUsage);
@@ -390,7 +394,12 @@ int Run(int argc, const char **argv) {
     if (options.font != nullptr) {
         LocalizeSetFontPath(PathsFromUtf8(options.font));
     }
+#ifdef __PS4__
+    // The translators' seed export reads the whole data directory; the console has no use for it.
+    if (false) {
+#else
     if (options.export_text == nullptr) {
+#endif
         // Once per save folder: the extracted data's text as JSON for translators (docs/LOCALIZATION.md).
         std::filesystem::path seed = PathsSaveRoot() / "lang-export";
         std::error_code       error;
@@ -408,6 +417,9 @@ int Run(int argc, const char **argv) {
     LoadInputScript(options.input);
 
     ConfigLoad();
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: config ready\n");
+#endif
     audio::SoundtrackEnsure();
     const Config &config = ConfigGet();
 
@@ -416,7 +428,13 @@ int Run(int argc, const char **argv) {
     bool         offscreen = options.offscreen || (options.headless && !gfx::HeadlessSurfaceAvailable());
     window.vulkan = !offscreen;
     WindowInit(window);
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: window ready\n");
+#endif
     InputInit();
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: input ready\n");
+#endif
 
     gfx::RendererConfig renderer;
     renderer.app_name = "Dark Cloud";
@@ -430,11 +448,17 @@ int Run(int argc, const char **argv) {
     renderer.layout = Layout(config);
     renderer.validation = renderer.validation || SettingsEnv("VULKAN_VALIDATION") != nullptr;
     gfx::RendererInit(WindowHandle(), renderer);
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: renderer ready\n");
+#endif
     gfx::SetAnisotropy(config.anisotropy);
 
     audio::DefaultMixer().SetMasterGain(config.master_volume);
     AudioSetSurround(config.surround);
     AudioOutputStart(audio::DefaultMixer().Rate(), RenderAudio, nullptr);
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: audio ready\n");
+#endif
 
     ClockSetTickRate(config.tick_rate);
     ClockSetUnbounded(options.headless);
@@ -447,6 +471,9 @@ int Run(int argc, const char **argv) {
     ConfigAddChangeHook(GameOptionsChanged);
     ConfigAddChangeHook(LocalizeConfigChanged);
 
+#ifdef __PS4__
+    std::fprintf(stderr, "startup: running the game\n");
+#endif
     int status = RunGame(argc, const_cast<char **>(argv));
     if (status == kExitOk && options.screenshot != nullptr) {
         status = Screenshot(options.screenshot);

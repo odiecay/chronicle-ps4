@@ -386,6 +386,11 @@ std::string DiscordActivityCommand(const DiscordActivity &activity, long long st
 }
 
 void DiscordStart(std::string client_id) {
+#ifdef __PS4__
+    // No Discord on a console; its presence thread's timed condition-variable waits also throw on this libc++.
+    (void)client_id;
+    return;
+#endif
     if (client_id.empty() || g_state.thread.joinable()) {
         return;
     }
