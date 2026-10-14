@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Compile one unit through kz-mwcc-exec and leave a depfile Ninja can read.
+
+    kz-mwcc --obj OBJ --depfile DEP -- FLAGS... SOURCE
+
+Run from the project root. KZ_MWCC is the compiler and KZ_MWCC_RUNNER the wibo-style runner
+(see kz-mwcc-exec). Without a dependency flag (-MD or -MMD) and without a map, the depfile is
+an empty rule for OBJ, so Ninja does not rebuild the unit forever. With one, a missing map fails.
+"""
+
+import os
+import subprocess
+import sys
+
+USAGE = "usage: kz-mwcc --obj OBJ --depfile DEP -- FLAGS... SOURCE"
+
+
+def parse(argv):
+    opts = {}
+    i = 0
+    while i < len(argv) and argv[i] != "--":
+        if argv[i] not in ("--obj", "--depfile") or i + 1 >= len(argv):
+            raise ValueError(argv[i])
+        opts[argv[i][2:]] = argv[i + 1]
+        i += 2
+    rest = argv[i + 1:] if i < len(argv) else []
+    if "obj" not in opts or not rest:
+        raise ValueError("missing arguments")
+    return opts["obj"], opts.get("depfile"), rest[:-1], rest[-1]
+
+
+def remove(*paths):
+    for path in paths:
+        if path is not None and os.path.lexists(path):
+            os.remove(path)
+
+
+def main(argv):
+    try:
+        obj, dep, flags, source = parse(argv[1:])
+    except ValueError:
+        print(USAGE, file=sys.stderr)
+        return 2
+    compiler = os.environ.get("KZ_MWCC")
+    if not compiler:
+        print("kz-mwcc: KZ_MWCC is not set", file=sys.stderr)
+        return 2
+
+    root = os.getcwd()
+    obj = os.path.abspath(obj)
+    dep_tmp = None
+    env = dict(os.environ, KZ_PROJECT_ROOT=root)
+    if dep is not None:
+        dep = os.path.abspath(dep)
+        dep_tmp = dep + ".tmp"
+        env.update(KZ_DEPFILE=dep_tmp, KZ_DEPFILE_TARGET=obj)
+
+    remove(obj, dep, dep_tmp)
+    for path in (obj, dep):
+        if path is not None:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    here = os.path.dirname(os.path.realpath(__file__))
+    code = subprocess.call([os.path.join(here, "kz-mwcc-exec"), compiler,
+                            "-c", *flags, "-o", obj, source], env=env)
+    if code != 0:
+        remove(dep_tmp)
+        return code
+
+    if not os.path.isfile(obj) or os.path.getsize(obj) == 0:
+        remove(obj, dep_tmp)
+        print("kz-mwcc: no output at %s" % obj, file=sys.stderr)
+        return 1
+
+    if dep is not None:
+        if os.path.isfile(dep_tmp):
+            os.replace(dep_tmp, dep)
+        elif any(flag in ("-MD", "-MMD") for flag in flags):
+            remove(obj)
+            print("kz-mwcc: the compiler wrote no dependency map for %s" % obj, file=sys.stderr)
+            return 1
+        else:
+            with open(dep, "w", encoding="utf-8") as f:
+                f.write("%s:\n" % obj)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

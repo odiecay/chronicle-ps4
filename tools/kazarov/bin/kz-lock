@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Run a command while holding flock locks, exclusive unless --shared is given.
+
+    kz-lock [--shared] [--lock FILE]... [--message TEXT] -- CMD [ARG...]
+
+With --shared every lock is taken shared, so shared holders run together and
+wait only for an exclusive holder. The locks are taken in sorted order, so two
+callers never hold them in opposite orders. A lock that is busy is waited for,
+and the wait is announced on stderr. Signals to kz-lock are forwarded to CMD, and kz-lock exits with
+CMD's exit code. Processes CMD left in its process group are ended before the
+locks are released.
+"""
+
+import argparse
+import fcntl
+import os
+import signal
+import subprocess
+import sys
+import time
+
+
+def acquire(path, shared):
+    """Take one lock; returns the file descriptor and whether the wait was needed."""
+    mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, mode | fcntl.LOCK_NB)
+        return fd, False
+    except BlockingIOError:
+        pass
+    print(f'kazarov: waiting for {path}', file=sys.stderr, flush=True)
+    fcntl.flock(fd, mode)
+    return fd, True
+
+
+def group_alive(pgid):
+    """True while any process is left in the process group."""
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def wait_group_gone(pgid, timeout=5.0):
+    """Polls every 0.1 s for up to timeout seconds; True once the group is empty."""
+    deadline = time.monotonic() + timeout
+    while group_alive(pgid):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.1)
+    return True
+
+
+def end_group(pgid):
+    """SIGTERM to the group, then SIGKILL if anything survives 5 s."""
+    if not group_alive(pgid):
+        return
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    if wait_group_gone(pgid):
+        return
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    wait_group_gone(pgid)
+
+
+def main():
+    argv = sys.argv[1:]
+    if '--' not in argv:
+        sys.exit('usage: kz-lock [--shared] [--lock FILE]... [--message TEXT] -- CMD [ARG...]')
+    split = argv.index('--')
+    parser = argparse.ArgumentParser(description='Run a command under flock locks.')
+    parser.add_argument('--shared', action='store_true', help='take the locks shared, not exclusive')
+    parser.add_argument('--lock', action='append', default=[], metavar='FILE')
+    parser.add_argument('--message', metavar='TEXT', help='printed once when a lock is waited for')
+    args = parser.parse_args(argv[:split])
+    command = argv[split + 1:]
+    if not command:
+        sys.exit('kz-lock: no command given after --')
+
+    fds = []
+    waited = False
+    try:
+        for path in sorted({os.path.abspath(p) for p in args.lock}):
+            fd, did_wait = acquire(path, args.shared)
+            fds.append(fd)
+            if did_wait and not waited and args.message:
+                print(f'kazarov: {args.message}', file=sys.stderr, flush=True)
+            waited = waited or did_wait
+    except KeyboardInterrupt:
+        sys.exit(130)
+
+    # The command gets its own process group, so signals reach it through the group below.
+    try:
+        if sys.version_info >= (3, 11):
+            proc = subprocess.Popen(command, process_group=0)
+        else:
+            proc = subprocess.Popen(command, preexec_fn=os.setpgrp)
+    except OSError as err:
+        sys.exit(f'kz-lock: cannot run {command[0]}: {err.strerror}')
+
+    def forward(signum, _frame):
+        try:
+            os.killpg(proc.pid, signum)
+        except ProcessLookupError:
+            pass
+
+    signal.signal(signal.SIGINT, forward)
+    signal.signal(signal.SIGTERM, forward)
+    code = proc.wait()
+    end_group(proc.pid)
+    for fd in fds:
+        os.close(fd)
+    sys.exit(128 - code if code < 0 else code)
+
+
+if __name__ == '__main__':
+    main()

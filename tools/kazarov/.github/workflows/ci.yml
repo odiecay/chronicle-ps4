@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: shellcheck bin/kazarov bin/kz-pcsx2 lib/*.sh tests/port_h/run.sh
+
+  pytest:
+    runs-on: ubuntu-latest
+    env:
+      # No baseline objects or reference elf.py on the runner; the ELF comparisons skip.
+      KZ_ELF_FIXTURES: /nonexistent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install cmake, ninja and pytest
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+          python -m pip install pytest
+      - name: pytest
+        run: >
+          python -m pytest -q
+          tests/test_kz_mwcc.py
+          tests/test_kz_lock.py
+          tests/test_kz_extract.py
+          tests/test_kz_split_stamp.py
+          tests/test_kz_cached.py
+          tests/test_kazarov_elf.py
+          tests/cmake
+
+  image:
+    # Builds the toolchain image to check that it builds. The image is never pushed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --platform linux/amd64 --build-arg KZ_IMAGE_ID=ci -t kazarov-dev:ci image
+      - name: Smoke test the image
+        run: |
+          docker run --rm -v "$PWD:/k" kazarov-dev:ci sh -ec 'command -v wibo satansfiddle objdiff-cli clangd clang lldb-server-19 || true; mips-ps2-decompals-as --version >/dev/null; python3 -c "import splat, pycdlib, clang.cindex, graphviz"; python3 $M2C --help >/dev/null; cat /opt/kazarov/image-id'

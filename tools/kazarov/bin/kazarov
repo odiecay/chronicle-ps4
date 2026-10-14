@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+# Builds and runs a Kazarov project. Run it from anywhere.
+#
+#   kazarov [--inside|--locked] build [config] [targets…]
+#   kazarov [--inside|--locked] run [config] [args…]
+#   kazarov shell [cmd…]
+#   kazarov image
+#   kazarov configs
+#
+# --inside means this is already in the container; --locked means the locks
+# are already held. Environment: CLEAN, JOBS, BUILDER, REBUILD_IMAGE, PCSX2.
+set -eo pipefail
+
+KZ_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+KZ_SELF="$KZ_ROOT/bin/kazarov"
+KZ_LOGICAL_PROJECT=$(cd "$KZ_ROOT/../.." && pwd)
+export KZ_LOGICAL_PROJECT
+if [ -n "${KZ_PROJECT_ROOT:-}" ]; then
+    KZ_PROJECT_ROOT=$(cd "$KZ_PROJECT_ROOT" && pwd -P)
+else
+    KZ_PROJECT_ROOT=$(cd "$KZ_ROOT/../.." && pwd -P)
+fi
+export KZ_PROJECT_ROOT
+# The OS of the host that started the container picks the default config.
+# shellcheck disable=SC2034  # read by lib/config.sh
+KZ_CALLER_OS=${KZ_HOST_OS:-}
+
+# shellcheck disable=SC1091
+. "$KZ_ROOT/lib/config.sh"
+# shellcheck disable=SC1091
+. "$KZ_ROOT/lib/host.sh"
+
+usage() {
+    echo "usage: kazarov [--inside|--locked] build [config] [targets…] | run [config] [args…] |" >&2
+    echo "       kazarov shell [cmd…] | image | configs" >&2
+    exit 2
+}
+
+inside=0
+locked=0
+while [ $# -gt 0 ]; do
+    case $1 in
+        --inside) inside=1; shift ;;
+        --locked) locked=1; shift ;;
+        *) break ;;
+    esac
+done
+[ $# -gt 0 ] || usage
+cmd=$1
+shift
+export JOBS=${JOBS:-$(kz_nproc)}
+
+# Writes the run descriptor for the selected configuration to KZ_RUN_OUT.
+kz_write_descriptor() {
+    kz_check_runnable
+    if [ -z "${KZ_RUN_OUT:-}" ]; then
+        return 0
+    fi
+    if [ -n "${KZ_RUN_ISO:-}" ]; then
+        printf 'iso:%s\n' "$KZ_RUN_ISO" > "$(kz_abs "$KZ_RUN_OUT")"
+    else
+        printf 'exe:%s\n' "$KZ_RUN_EXE" > "$(kz_abs "$KZ_RUN_OUT")"
+    fi
+}
+
+# Launches what a run descriptor names. Host side only, after the build
+# has released its locks.
+kz_launch() {
+    local desc=$1 line kind path
+    shift
+    line=$(sed -n '1p' "$desc")
+    rm -f "$desc"
+    kind=${line%%:*}
+    path=${line#*:}
+    case $kind in
+        iso)
+            exec "$KZ_ROOT/bin/kz-pcsx2" "$(kz_abs "$path")" ;;
+        exe)
+            if [ -n "${KZ_RUN_OS:-}" ] && [ "$(kz_os_norm "$KZ_RUN_OS")" != "$(kz_host_os)" ]; then
+                echo "kazarov: $KZ_CONFIG runs on $KZ_RUN_OS, not on this host" >&2
+                exit 1
+            fi
+            # kz_before_launch may set KZ_LAUNCH_PREFIX, an array of command words put in front of the program.
+            # It runs in this shell, not a subshell, so the array survives to the exec.
+            KZ_LAUNCH_PREFIX=()
+            if declare -F kz_before_launch >/dev/null; then
+                cd "$KZ_PROJECT_ROOT" && kz_before_launch
+            fi
+            exec ${KZ_LAUNCH_PREFIX[@]+"${KZ_LAUNCH_PREFIX[@]}"} "$(kz_abs "$path")" "$@" ;;
+        *)
+            echo "kazarov: bad run descriptor in $desc" >&2
+            exit 1 ;;
+    esac
+}
+
+# Configures when the cache is missing or stale, and decides whether the
+# path check forces a fresh configure. Sets configure_mode and build_p.
+kz_configure_check() {
+    local tag home cachedir sig
+    build_abs=$(kz_abs "$KZ_BUILD_DIR")
+    mkdir -p "$build_abs"
+    build_p=$(cd "$build_abs" && pwd -P)
+    src_p=$(cd "$KZ_PROJECT_ROOT" && pwd -P)
+    configure_mode=none
+
+    if [ -f "$build_p/CMakeCache.txt" ]; then
+        home=$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$build_p/CMakeCache.txt" | head -1)
+        cachedir=$(sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' "$build_p/CMakeCache.txt" | head -1)
+        if [ "$home" != "$src_p" ] || [ "$cachedir" != "$build_p" ]; then
+            echo "kazarov: reconfiguring $KZ_BUILD_DIR (path changed)"
+            rm -rf "$build_p/CMakeCache.txt" "$build_p/CMakeFiles" "$build_p/build.ninja" \
+                   "$build_p/.ninja_log" "$build_p/.ninja_deps"
+            configure_mode=fresh
+        fi
+    fi
+
+    tag=
+    if [ "$KZ_WHERE" = container ]; then
+        tag=${KZ_IMAGE_TAG:-unknown}
+    fi
+    sig=$(printf 'preset=%s\ntag=%s\n' "${KZ_PRESET:-}" "$tag"
+          for arg in "${KZ_CMAKE_ARGS[@]}"; do printf 'arg=%s\n' "$arg"; done)
+    if [ "$configure_mode" = none ]; then
+        if [ ! -f "$build_p/build.ninja" ] \
+           || [ "$(cat "$build_p/.kazarov-configure" 2>/dev/null)" != "$sig" ]; then
+            configure_mode=plain
+        fi
+    fi
+    configure_sig=$sig
+}
+
+# Runs cmake for the selected configuration. $1 is "fresh" or "plain".
+kz_configure() {
+    local -a extra=()
+    if [ "$1" = fresh ]; then
+        extra=(--fresh)
+    fi
+    if [ -n "${KZ_PRESET:-}" ]; then
+        cmake --preset "$KZ_PRESET" "${extra[@]}"
+    else
+        cmake -S "$src_p" -B "$build_p" -G Ninja "${extra[@]}" "${KZ_CMAKE_ARGS[@]}"
+    fi
+    printf '%s\n' "$configure_sig" > "$build_p/.kazarov-configure"
+}
+
+# Stops unless the build directory's physical path is strictly below the physical project
+# root, so a symlink cannot send deletes outside. The check runs before anything is created:
+# the nearest existing ancestor is resolved, the missing components are appended, and only
+# then is the directory made.
+kz_build_dir_check() {
+    local dir root anc rest phys
+    dir=$(kz_abs "$KZ_BUILD_DIR")
+    root=$(cd "$KZ_PROJECT_ROOT" && pwd -P)
+    anc=$dir
+    rest=
+    while [ ! -d "$anc" ]; do
+        rest="/$(basename "$anc")$rest"
+        anc=$(dirname "$anc")
+    done
+    phys=$(cd "$anc" && pwd -P)$rest
+    case $rest in
+        */..|*/../*|*/.|*/./*) phys= ;;
+    esac
+    case $phys in
+        "$root"/?*) ;;
+        *)
+            echo "kazarov: $KZ_CONFIG: KZ_BUILD_DIR $KZ_BUILD_DIR is not below the project root" >&2
+            exit 1 ;;
+    esac
+    mkdir -p "$dir"
+}
+
+# Deletes a build directory but keeps the ninja log entries of outputs outside
+# it (disc extraction, split stamp), so a clean build does not redo them.
+kz_clean() {
+    local dir=$1 kept
+    kept=
+    if [ -f "$dir/.ninja_log" ]; then
+        kept=$(awk -F '\t' -v dir="$dir/" 'NR == 1 || (substr($4, 1, 1) == "/" && index($4, dir) != 1)' "$dir/.ninja_log")
+    fi
+    rm -rf "$dir"
+    if [ -n "$kept" ] && [ "$(printf '%s\n' "$kept" | wc -l)" -gt 1 ]; then
+        mkdir -p "$dir"
+        printf '%s\n' "$kept" > "$dir/.ninja_log"
+    fi
+}
+
+# Builds in the project root under the locks. $1 is build or run; the rest
+# are targets for build, or the program's arguments for run.
+kz_do_work() {
+    local what=$1 stamp_abs before=0 found f
+    local -a targets=()
+    shift
+    cd "$KZ_PROJECT_ROOT"
+
+    if [ "$what" = run ]; then
+        kz_check_runnable
+    fi
+    kz_build_dir_check
+
+    if [ -n "${CLEAN:-}" ] && [ "$CLEAN" != 0 ]; then
+        kz_clean "$(kz_abs "$KZ_BUILD_DIR")"
+    fi
+
+    if [ "${#KZ_REQUIRE_ANY[@]}" -gt 0 ]; then
+        found=0
+        for f in "${KZ_REQUIRE_ANY[@]}"; do
+            if [ -e "$(kz_abs "$f")" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ "$found" = 0 ]; then
+            echo "${KZ_REQUIRE_MESSAGE:-kazarov: $KZ_CONFIG needs one of: ${KZ_REQUIRE_ANY[*]}}" >&2
+            exit 1
+        fi
+    fi
+
+    if declare -F kz_before_build >/dev/null; then
+        (cd "$KZ_PROJECT_ROOT" && kz_before_build) || exit 1
+    fi
+
+    kz_configure_check
+    if [ "$configure_mode" != none ]; then
+        kz_configure "$configure_mode"
+    fi
+
+    if [ "${#KZ_SETUP_TARGETS[@]}" -gt 0 ]; then
+        stamp_abs=
+        if [ -n "${KZ_SETUP_STAMP:-}" ]; then
+            stamp_abs=$(kz_abs "$KZ_SETUP_STAMP")
+            if [ -e "$stamp_abs" ]; then
+                before=1
+            fi
+        fi
+        cmake --build "$build_p" -j "$JOBS" --target "${KZ_SETUP_TARGETS[@]}"
+        if [ -n "$stamp_abs" ] && [ "$before" = 0 ] && [ -e "$stamp_abs" ]; then
+            kz_configure plain
+        fi
+    fi
+
+    if [ "$what" = run ]; then
+        targets=(${KZ_RUN_TARGETS[@]+"${KZ_RUN_TARGETS[@]}"})
+    elif [ "$#" -gt 0 ]; then
+        targets=("$@")
+    else
+        targets=(${KZ_BUILD_TARGETS[@]+"${KZ_BUILD_TARGETS[@]}"})
+    fi
+    if [ "${#targets[@]}" -gt 0 ]; then
+        cmake --build "$build_p" -j "$JOBS" --target "${targets[@]}"
+    else
+        cmake --build "$build_p" -j "$JOBS"
+    fi
+
+    if [ "$what" = build ] && [ "$#" -eq 0 ] && declare -F kz_after_build >/dev/null; then
+        kz_after_build
+    fi
+    if [ "$what" = run ]; then
+        if declare -F kz_after_run_build >/dev/null; then
+            kz_after_run_build || echo "kazarov: kz_after_run_build failed; the run continues" >&2
+        fi
+        kz_write_descriptor
+    fi
+}
+
+# Build or run with the configuration already selected: takes the locks,
+# then does the work. Outside a container a run launches after the locks
+# are released.
+kz_build_or_run() {
+    local what=$1 l rc
+    local -a lockargs=() locks=()
+    shift
+
+    if [ "$locked" = 1 ]; then
+        kz_do_work "$what" "$@"
+        return 0
+    fi
+
+    if [ "$KZ_WHERE" = container ] && [ "$inside" = 0 ]; then
+        mkdir -p "$KZ_PROJECT_ROOT/.kazarov"
+        kz_ensure_image
+        kz_report_parallelism
+        if [ "$what" = run ]; then
+            KZ_RUN_OUT=".kazarov/run-$$.txt"
+            export KZ_RUN_OUT
+        fi
+        rc=0
+        kz_container_run "$what" "$KZ_CONFIG" "$@" || rc=$?
+        if [ "$rc" != 0 ]; then
+            exit "$rc"
+        fi
+        if [ "$what" = run ]; then
+            kz_launch "$KZ_PROJECT_ROOT/$KZ_RUN_OUT" "$@"
+        fi
+        exit 0
+    fi
+
+    cd "$KZ_PROJECT_ROOT"
+    mkdir -p .kazarov/locks
+    if [ "$what" = run ] && [ -z "${KZ_RUN_OUT:-}" ]; then
+        KZ_RUN_OUT=".kazarov/run-$$.txt"
+        export KZ_RUN_OUT
+    fi
+    if [ "${#KZ_LOCKS[@]}" -gt 0 ]; then
+        locks=("${KZ_LOCKS[@]}")
+    else
+        locks=("$KZ_CONFIG")
+    fi
+    for l in "${locks[@]}"; do
+        lockargs+=(--lock ".kazarov/locks/$l.lock")
+    done
+    rc=0
+    "$KZ_ROOT/bin/kz-lock" "${lockargs[@]}" -- "$KZ_SELF" --locked "$what" "$KZ_CONFIG" "$@" || rc=$?
+    if [ "$rc" != 0 ]; then
+        exit "$rc"
+    fi
+    if [ "$what" = run ] && [ "$inside" = 0 ]; then
+        kz_launch "$KZ_PROJECT_ROOT/$KZ_RUN_OUT" "$@"
+    fi
+    exit 0
+}
+
+case $cmd in
+    configs)
+        kz_load_project
+        for c in ${KZ_CONFIGS[@]+"${KZ_CONFIGS[@]}"}; do
+            printf '%s\n' "$c"
+        done
+        ;;
+
+    image)
+        if [ "$inside" = 1 ]; then
+            kz_image_tag
+        else
+            kz_ensure_image
+            kz_image_name
+        fi
+        ;;
+
+    shell)
+        kz_load_project
+        if [ "$inside" = 1 ]; then
+            if [ "$#" -eq 0 ]; then
+                exec bash
+            fi
+            exec "$@"
+        fi
+        kz_ensure_image
+        KZ_INTERACTIVE=1 kz_container_run shell "$@"
+        ;;
+
+    build|run)
+        kz_load_project
+        name=
+        if [ "$#" -gt 0 ] && kz_select "$1"; then
+            shift
+        else
+            name=$(kz_default_config "$cmd")
+            if [ -z "$name" ]; then
+                echo "kazarov: no default $cmd configuration for this OS" >&2
+                exit 1
+            fi
+            if ! kz_select "$name"; then
+                echo "kazarov: default $cmd configuration '$name' is not in kz_config" >&2
+                exit 1
+            fi
+        fi
+        kz_check_selected
+
+        if [ "$KZ_WHERE" = windows ]; then
+            if [ "$(kz_host_os)" != windows ]; then
+                echo "kazarov: $KZ_CONFIG builds only on Windows" >&2
+                exit 1
+            fi
+            cd "$KZ_PROJECT_ROOT"
+            ps=pwsh
+            command -v pwsh >/dev/null 2>&1 || ps=powershell
+            exec "$ps" -NoProfile -File "$KZ_WINDOWS_HOST_SCRIPT" "$cmd" "$KZ_CONFIG" "$@"
+        fi
+
+        kz_build_or_run "$cmd" "$@"
+        ;;
+
+    *)
+        usage
+        ;;
+esac

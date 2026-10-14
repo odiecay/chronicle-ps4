@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""Runs image/kz-ffmpeg, which lives under image/ because the image build context is image/."""
+
+import os
+import runpy
+
+runpy.run_path(
+    os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'image', 'kz-ffmpeg'),
+    run_name='__main__',
+)

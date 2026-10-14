@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Keep a split's output mtimes and stamp steady when a re-split changes nothing.
+
+    kz-split-stamp snapshot DIR SNAP
+    kz-split-stamp restore DIR SNAP STAMP
+
+snapshot records every file under DIR as path -> [sha1, mtime_ns] in SNAP.
+restore gives back the recorded mtime of each file whose sha1 is unchanged,
+then writes STAMP, the sha1 over the sorted (path, sha1) pairs, if its content
+differs or it is missing. Files that changed keep their new mtimes.
+"""
+
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def digest_tree(root):
+    """path -> (sha1, mtime_ns) for every file under root."""
+    files = {}
+    if not root.is_dir():
+        return files
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            path = Path(dirpath, name)
+            with open(path, 'rb') as f:
+                digest = hashlib.sha1(f.read()).hexdigest()
+            files[path.relative_to(root).as_posix()] = (digest, path.stat().st_mtime_ns)
+    return files
+
+
+def write_atomic(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.kz-tmp')
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def snapshot(root, snap):
+    tree = digest_tree(root)
+    write_atomic(snap, json.dumps({rel: list(value) for rel, value in sorted(tree.items())},
+                                  indent=0, sort_keys=True) + '\n')
+
+
+def restore(root, snap, stamp):
+    try:
+        recorded = json.loads(snap.read_text())
+    except (OSError, ValueError):
+        recorded = {}
+    tree = digest_tree(root)
+    for rel, (digest, mtime) in tree.items():
+        old = recorded.get(rel)
+        if old and old[0] == digest and old[1] != mtime:
+            path = root / rel
+            os.utime(path, ns=(path.stat().st_atime_ns, old[1]))
+            tree[rel] = (digest, old[1])
+
+    h = hashlib.sha1()
+    for rel in sorted(tree):
+        h.update(f'{rel}\t{tree[rel][0]}\n'.encode())
+    text = h.hexdigest() + '\n'
+    try:
+        if stamp.read_text() == text:
+            return
+    except OSError:
+        pass
+    write_atomic(stamp, text)
+
+
+def main():
+    usage = 'usage: kz-split-stamp snapshot DIR SNAP | kz-split-stamp restore DIR SNAP STAMP'
+    if len(sys.argv) < 4 or sys.argv[1] not in ('snapshot', 'restore'):
+        sys.exit(usage)
+    command, root, snap = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+    if command == 'snapshot' and len(sys.argv) == 4:
+        snapshot(root, snap)
+    elif command == 'restore' and len(sys.argv) == 5:
+        restore(root, snap, Path(sys.argv[4]))
+    else:
+        sys.exit(usage)
+
+
+if __name__ == '__main__':
+    main()

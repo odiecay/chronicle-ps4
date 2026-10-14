@@ -1,4 +1,0 @@
-[submodule "tools/kazarov"]
-	path = tools/kazarov
-	url = https://github.com/odiecay/chronicle-ps4-kazarov.git
-	branch = ps4

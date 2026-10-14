@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""Extract a disc image's files into <out>/iso, once per image.
+
+    kz-extract --iso ISO --checksum FILE --out DIR --id-file FILE [--force]
+
+The image is checked against a sha256sum-format checksum file before anything
+is taken from it. The state file, which is the id file's name without .id
+plus .json, records the image's size and mtime, its sha256, the extractor
+version and every file extracted with its size. When all of that still
+matches and the files are present, nothing is touched. Otherwise the image is
+hashed once, missing or wrong-size files are written again, leftovers are
+removed, and the id file (sha256 and version) is rewritten only when those
+change, so anything that depends on it rebuilds only then. A changed content id
+(sha256 or extractor version) extracts every file again, since same-size files
+can differ.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import struct
+import sys
+from pathlib import Path
+
+EXTRACTOR_VERSION = '1'
+SECTOR = 2048
+CHUNK = 1 << 24
+
+
+class Entry:
+    """One file of the image: its path under iso/, its extent and its size."""
+
+    def __init__(self, rel, extent, size):
+        self.rel = rel
+        self.extent = extent
+        self.size = size
+
+
+class Iso9660:
+    """The ISO 9660 directory tree of a disc image, read with the standard library."""
+
+    def __init__(self, path):
+        self.fp = open(path, 'rb')
+        pvd = self.read(16 * SECTOR, SECTOR)
+        if pvd[1:6] != b'CD001':
+            self.fp.close()
+            sys.exit(f'kz-extract: {path} is not an ISO 9660 image')
+        self.root = self.record(pvd[156:190])
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        self.fp.close()
+
+    def read(self, offset, size):
+        self.fp.seek(offset)
+        return self.fp.read(size)
+
+    @staticmethod
+    def record(raw):
+        extent, = struct.unpack_from('<I', raw, 2)
+        size, = struct.unpack_from('<I', raw, 10)
+        flags = raw[25]
+        name = raw[33:33 + raw[32]]
+        return name, extent, size, bool(flags & 2)
+
+    def children(self, directory):
+        _name, extent, size, _is_dir = directory
+        data = self.read(extent * SECTOR, size)
+        offset = 0
+        while offset < len(data):
+            length = data[offset]
+            if length == 0:
+                offset = (offset // SECTOR + 1) * SECTOR
+                continue
+            record = self.record(data[offset:offset + length])
+            offset += length
+            if record[0] not in (b'\0', b'\1'):
+                yield record
+
+    def files(self, directory=None, prefix=''):
+        """Every file under the directory, with names as extraction writes them."""
+        for name, extent, size, is_dir in self.children(directory or self.root):
+            identifier = name.decode()
+            if is_dir:
+                yield from self.files((name, extent, size, is_dir), f'{prefix}{identifier}/')
+                continue
+            file_name = identifier.split(';')[0]
+            # Empty extensions are dropped (DMMY. becomes DMMY).
+            if file_name.endswith('.'):
+                file_name = file_name[:-1]
+            yield Entry(f'{prefix}{file_name}', extent, size)
+
+    def copy(self, entry, out):
+        self.fp.seek(entry.extent * SECTOR)
+        left = entry.size
+        while left:
+            chunk = self.fp.read(min(left, CHUNK))
+            if not chunk:
+                sys.exit(f'kz-extract: the image ends inside {entry.rel}')
+            out.write(chunk)
+            left -= len(chunk)
+
+
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for block in iter(lambda: f.read(CHUNK), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def expected_sha(checksum, name):
+    try:
+        lines = checksum.read_text().splitlines()
+    except OSError as err:
+        sys.exit(f'kz-extract: cannot read {checksum}: {err.strerror}')
+    for line in lines:
+        parts = line.split(None, 1)
+        if len(parts) == 2 and Path(parts[1].strip().lstrip('*')).name == name:
+            return parts[0].lower()
+    sys.exit(f'kz-extract: {checksum} has no entry for {name}')
+
+
+def read_text(path):
+    try:
+        return path.read_text()
+    except OSError:
+        return None
+
+
+def load_state(path):
+    try:
+        state = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    return state if isinstance(state, dict) else None
+
+
+def write_if_changed(path, text):
+    """Atomically replace the file's content; returns whether anything changed."""
+    if read_text(path) == text:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.kz-tmp')
+    tmp.write_text(text)
+    os.replace(tmp, path)
+    return True
+
+
+def state_path(id_file):
+    name = id_file.name
+    if name.endswith('.id'):
+        name = name[:-len('.id')]
+    return id_file.with_name(name + '.json')
+
+
+def prune(files_dir, wanted):
+    """Remove files under files_dir that the image no longer has, and empty directories."""
+    if not files_dir.is_dir():
+        return 0
+    removed = 0
+    dirs = []
+    for path in files_dir.rglob('*'):
+        if path.is_dir() and not path.is_symlink():
+            dirs.append(path)
+        elif path.relative_to(files_dir).as_posix() not in wanted:
+            path.unlink()
+            removed += 1
+    for path in sorted(dirs, reverse=True):
+        try:
+            path.rmdir()
+        except OSError:
+            pass
+    return removed
+
+
+def is_present(path, size):
+    try:
+        return path.stat().st_size == size
+    except OSError:
+        return False
+
+
+def copy_out(iso, entry, dest):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + '.kz-tmp')
+    with open(tmp, 'wb') as f:
+        iso.copy(entry, f)
+    os.replace(tmp, dest)
+
+
+def extract(iso_path, checksum, out, id_file, force):
+    if not iso_path.is_file():
+        sys.exit(f'kz-extract: {iso_path} does not exist')
+
+    files_dir = out / 'iso'
+    state_file = state_path(id_file)
+    st = iso_path.stat()
+    fingerprint = {'size': st.st_size, 'mtime_ns': st.st_mtime_ns}
+    state = load_state(state_file)
+    fresh = (state is not None and not force
+             and state.get('iso') == fingerprint and state.get('version') == EXTRACTOR_VERSION
+             and isinstance(state.get('sha256'), str))
+
+    with Iso9660(iso_path) as iso:
+        wanted = {}
+        for entry in iso.files():
+            wanted[entry.rel] = entry
+        sizes = {rel: entry.size for rel, entry in wanted.items()}
+
+        if fresh:
+            # The image is unchanged since it was hashed, so its recorded sha256 stands.
+            sha = state.get('sha256')
+        else:
+            print(f'Hashing {iso_path}', flush=True)
+            sha = sha256_of(iso_path)
+        expected = expected_sha(checksum, iso_path.name)
+        if sha != expected:
+            sys.exit(f'kz-extract: {iso_path} does not match {checksum}: '
+                     f'sha256 {sha}, expected {expected}')
+
+        id_text = f'{sha} {EXTRACTOR_VERSION}\n'
+        recorded = (state.get('sha256'), state.get('version')) if state else None
+        content_changed = recorded != (sha, EXTRACTOR_VERSION)
+        todo = [entry for rel, entry in wanted.items()
+                if force or content_changed or not is_present(files_dir / rel, entry.size)]
+
+        if (fresh and not todo and state.get('files') == sizes
+                and read_text(id_file) == id_text):
+            print('Extracted files are up to date', flush=True)
+            return
+
+        if todo:
+            print(f'Extracting {len(todo)} files', flush=True)
+            for entry in todo:
+                copy_out(iso, entry, files_dir / entry.rel)
+
+    stale = prune(files_dir, set(sizes))
+    if stale:
+        print(f'Removed {stale} stale file(s)', flush=True)
+
+    state_text = json.dumps({'iso': fingerprint, 'sha256': sha, 'version': EXTRACTOR_VERSION,
+                             'files': sizes}, indent=1, sort_keys=True) + '\n'
+    write_if_changed(state_file, state_text)
+    if write_if_changed(id_file, id_text):
+        print(f'Wrote {id_file}', flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Extract a disc image into <out>/iso, cached by content.')
+    parser.add_argument('--iso', required=True, type=Path, help='the disc image')
+    parser.add_argument('--checksum', required=True, type=Path,
+                        help='sha256sum-format file naming the image')
+    parser.add_argument('--out', required=True, type=Path, help='directory that receives iso/')
+    parser.add_argument('--id-file', required=True, type=Path,
+                        help='content id of the extraction; rewritten only when it changes')
+    parser.add_argument('--force', action='store_true', help='extract every file again')
+    args = parser.parse_args()
+    extract(args.iso, args.checksum, args.out, args.id_file, args.force)
+
+
+if __name__ == '__main__':
+    main()

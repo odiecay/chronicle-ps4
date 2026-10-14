@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""Build a minimal LGPL-only FFmpeg into DIR and stamp it.
+
+    kz-ffmpeg --out DIR [--tarball FILE] [--sha256 HEX] [--jobs N] [--check] [--print-configure]
+
+The build is the mpeg2video decoder and the mpegvideo parser, with static libavcodec.a and
+libavutil.a. The Linux image and macOS hosts use it; Windows takes BtbN's lgpl-shared DLLs.
+This file lives under image/ because the Docker build context is image/; bin/kz-ffmpeg launches it.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path
+
+VERSION = '7.1.1'
+URL = f'https://ffmpeg.org/releases/ffmpeg-{VERSION}.tar.xz'
+SHA256 = '733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1'
+LICENSE_LINE = 'License: LGPL version 2.1 or later'
+STAMP = 'kz-ffmpeg.json'
+PRODUCTS = ('lib/libavcodec.a', 'lib/libavutil.a', 'include/libavcodec/avcodec.h')
+CONFIGURE_FLAGS = [
+    '--disable-everything',
+    '--disable-programs',
+    '--disable-doc',
+    '--disable-network',
+    '--disable-autodetect',
+    '--disable-avformat',
+    '--disable-avfilter',
+    '--disable-swscale',
+    '--disable-swresample',
+    '--disable-avdevice',
+    '--enable-decoder=mpeg2video',
+    '--enable-parser=mpegvideo',
+    '--enable-pic',
+    '--disable-shared',
+    '--enable-static',
+]
+GPL_FLAGS = ('--enable-gpl', '--enable-nonfree', '--enable-version3')
+
+
+def configure_flags():
+    flags = list(CONFIGURE_FLAGS)
+    # configure aborts without nasm unless x86 assembly is disabled explicitly.
+    if shutil.which('nasm') is None:
+        flags.append('--disable-x86asm')
+    return flags
+
+
+# The LGPL license claim for the static libraries depends on this: a GPL or nonfree flag must never reach configure.
+_leaked = sorted(set(configure_flags()) & set(GPL_FLAGS))
+if _leaked:
+    raise SystemExit(f"kz-ffmpeg: refusing to configure with {' '.join(_leaked)}")
+
+
+def expected_stamp(sha):
+    return {'version': VERSION, 'sha256': sha, 'configure': configure_flags(), 'license': LICENSE_LINE}
+
+
+def current(out, sha):
+    try:
+        with open(out / STAMP) as f:
+            stamp = json.load(f)
+    except (OSError, ValueError):
+        return False
+    return stamp == expected_stamp(sha) and all((out / p).exists() for p in PRODUCTS)
+
+
+def write_stamp(out, sha):
+    tmp = out / (STAMP + '.kz-tmp')
+    with open(tmp, 'w') as f:
+        json.dump(expected_stamp(sha), f, indent=1, sort_keys=True)
+        f.write('\n')
+    os.replace(tmp, out / STAMP)
+
+
+def sha256_of(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def download(dest):
+    try:
+        with urllib.request.urlopen(URL) as resp, open(dest, 'wb') as f:
+            shutil.copyfileobj(resp, f)
+    except OSError as err:
+        sys.exit(f'kz-ffmpeg: cannot download {URL}: {err}')
+
+
+def extract(tarball, into):
+    with tarfile.open(tarball) as tf:
+        # Older Pythons have no extraction filters, so there the SHA-256 check is the only guard.
+        if hasattr(tarfile, 'data_filter'):
+            tf.extractall(into, filter='data')
+        else:
+            tf.extractall(into)
+    src = into / f'ffmpeg-{VERSION}'
+    if not src.is_dir():
+        sys.exit(f'kz-ffmpeg: tarball does not contain ffmpeg-{VERSION}/')
+    return src
+
+
+def configure_and_build(src, out, jobs):
+    out.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ['./configure', f'--prefix={out}', *configure_flags()],
+        cwd=src, capture_output=True, text=True, encoding='utf-8', errors='replace',
+    )
+    log = result.stdout + result.stderr
+    (out / 'configure.log').write_text(log, encoding='utf-8')
+    if result.returncode != 0:
+        sys.stderr.write('\n'.join(log.splitlines()[-40:]) + '\n')
+        sys.exit(result.returncode)
+    if LICENSE_LINE not in (line.rstrip() for line in log.splitlines()):
+        sys.exit(f'kz-ffmpeg: configure did not report {LICENSE_LINE}; refusing to build')
+    for cmd in (['make', f'-j{jobs}'], ['make', 'install']):
+        code = subprocess.run(cmd, cwd=src).returncode
+        if code != 0:
+            sys.exit(code)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=f'Build a minimal LGPL-only FFmpeg {VERSION} for the Kazarov image.')
+    parser.add_argument('--out', metavar='DIR')
+    parser.add_argument('--tarball', metavar='FILE')
+    parser.add_argument('--sha256', metavar='HEX')
+    parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1, metavar='N')
+    parser.add_argument('--check', action='store_true', help='exit 0 only if DIR holds a current build')
+    parser.add_argument('--print-configure', action='store_true', help='print the configure line and exit')
+    args = parser.parse_args()
+
+    if args.print_configure:
+        print('configure ' + shlex.join(configure_flags()))
+        return
+    if args.out is None:
+        parser.error('--out DIR is required')
+
+    out = Path(args.out).resolve()
+    sha = (args.sha256 or SHA256).lower()
+    if args.check:
+        if not current(out, sha):
+            sys.exit(f'kz-ffmpeg: {out} does not hold a current build')
+        return
+    if current(out, sha):
+        print(f'kz-ffmpeg: {out} is up to date')
+        return
+    (out / STAMP).unlink(missing_ok=True)
+
+    with tempfile.TemporaryDirectory(prefix='kz-ffmpeg-') as tmp:
+        tmp = Path(tmp)
+        if args.tarball:
+            tarball = Path(args.tarball)
+        else:
+            tarball = tmp / f'ffmpeg-{VERSION}.tar.xz'
+            download(tarball)
+        got = sha256_of(tarball)
+        if got != sha:
+            sys.exit(f'kz-ffmpeg: {tarball} sha256 mismatch: expected {sha}, got {got}')
+        src = extract(tarball, tmp)
+        configure_and_build(src, out, args.jobs)
+
+    write_stamp(out, sha)
+    print(f'kz-ffmpeg: built FFmpeg {VERSION} into {out}')
+
+
+if __name__ == '__main__':
+    main()

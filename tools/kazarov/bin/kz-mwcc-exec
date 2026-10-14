@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Run a compiler from a private directory, as a drop-in for wibo.
+
+    kz-mwcc-exec EXE ARGS...
+
+Runs RUNNER EXE ARGS, RUNNER being the first word of KZ_MWCC_RUNNER (a shlex string,
+default wibo). The run happens in a temporary directory that symlinks the top level of
+KZ_PROJECT_ROOT (default: the current directory), so relative paths in ARGS resolve as they
+do in the root. A relative RUNNER or EXE is taken from the root; a bare name from PATH.
+
+If KZ_DEPFILE names a file that does not exist yet and the compiler left a regular *.d file
+in its directory, that map is rewritten into KZ_DEPFILE: paths become absolute under the root
+and KZ_DEPFILE_TARGET is the target. The map's name does not matter; it may be named after the
+source or the object.
+"""
+
+import os
+import posixpath
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+
+SKIPPED_NAMES = (".git",)
+SKIPPED_SUFFIXES = (".d", ".o")
+
+
+def resolve(word, root):
+    """Absolute path of a program, or None when a bare name is not on PATH."""
+    if "/" in word:
+        return os.path.normpath(os.path.join(root, word))
+    found = shutil.which(word)
+    return os.path.abspath(found) if found else None
+
+
+def link_root(root, directory):
+    """Symlink the top level of the root into the private directory."""
+    for name in os.listdir(root):
+        if name in SKIPPED_NAMES or name.endswith(SKIPPED_SUFFIXES):
+            continue
+        os.symlink(os.path.join(root, name), os.path.join(directory, name))
+
+
+def find_map(directory, target):
+    """The compiler's dependency map: a regular *.d file, preferring the target's stem."""
+    stem = os.path.splitext(os.path.basename(target))[0]
+    names = []
+    for name in os.listdir(directory):
+        path = os.path.join(directory, name)
+        if name.endswith(".d") and os.path.isfile(path) and not os.path.islink(path):
+            names.append(name)
+    names.sort(key=lambda name: (os.path.splitext(name)[0] != stem, name))
+    return os.path.join(directory, names[0]) if names else None
+
+
+def escape(path):
+    """A path as a Make rule reads it: $, space and # are escaped."""
+    return path.replace("$", "$$").replace(" ", "\\ ").replace("#", "\\#")
+
+
+def dependency_paths(text, root, temp_prefixes):
+    """The absolute dependency paths of a compiler dependency map."""
+    lines = []
+    for raw in text.split("\n"):
+        line = raw.replace("\r", "")
+        if line.endswith("\\"):
+            line = line[:-1]
+        lines.append(" " + line)
+    # The first colon ends the target; the rest is the dependency list.
+    _, colon, body = "".join(lines).partition(":")
+    if not colon:
+        body = "".join(lines)
+    body = body.replace("\\", "/")
+
+    deps = []
+    for path in body.split():
+        if re.match(r"[A-Za-z]:/", path):
+            path = path[2:]
+        # A temporary target that the compiler wrapper put in the map is not a dependency.
+        if path.endswith(":"):
+            continue
+        for prefix in temp_prefixes:
+            if path == prefix or path.startswith(prefix + "/"):
+                path = root + path[len(prefix):]
+                break
+        if not path.startswith("/"):
+            path = root + "/" + path
+        deps.append(posixpath.normpath(path))
+    return deps
+
+
+def rewrite_map(text, target, root, temp_prefixes):
+    """Rewrite a compiler dependency map into a Ninja rule with absolute paths."""
+    deps = dependency_paths(text, root, temp_prefixes)
+    return escape(target) + ":" + "".join(" \\\n\t" + escape(dep) for dep in deps) + "\n"
+
+
+def main(argv):
+    if len(argv) < 2:
+        print("usage: kz-mwcc-exec EXE ARGS...", file=sys.stderr)
+        return 2
+
+    root = os.path.abspath(os.environ.get("KZ_PROJECT_ROOT") or os.getcwd())
+    words = shlex.split(os.environ.get("KZ_MWCC_RUNNER") or "wibo")
+    if not words:
+        print("kz-mwcc-exec: KZ_MWCC_RUNNER is empty", file=sys.stderr)
+        return 2
+    runner = resolve(words[0], root)
+    exe = resolve(argv[1], root)
+    for word, path in ((words[0], runner), (argv[1], exe)):
+        if path is None:
+            print("kz-mwcc-exec: cannot find %s" % word, file=sys.stderr)
+            return 127
+
+    dep = None
+    target = os.environ.get("KZ_DEPFILE_TARGET")
+    if os.environ.get("KZ_DEPFILE"):
+        dep = os.path.join(root, os.environ["KZ_DEPFILE"])
+        if os.path.exists(dep):
+            dep = None
+        elif not target:
+            print("kz-mwcc-exec: KZ_DEPFILE needs KZ_DEPFILE_TARGET", file=sys.stderr)
+            return 2
+
+    temp = tempfile.mkdtemp(prefix="kz-mwcc.")
+    try:
+        link_root(root, temp)
+        env = dict(os.environ, KZ_MWCC_CWD=temp)
+        proc = subprocess.run([runner, *words[1:], exe, *argv[2:]],
+                              cwd=temp, env=env, stdin=subprocess.DEVNULL)
+        code = proc.returncode if proc.returncode >= 0 else 128 - proc.returncode
+
+        if code == 0 and dep is not None:
+            found = find_map(temp, target)
+            if found is not None:
+                with open(found, encoding="utf-8", errors="replace") as f:
+                    text = f.read()
+                prefixes = sorted({temp, os.path.realpath(temp)}, key=len, reverse=True)
+                for path in dependency_paths(text, root, prefixes):
+                    if not os.path.exists(path):
+                        print("kz-mwcc-exec: dependency map names a missing file: %s "
+                              "(paths with spaces are not supported)" % path, file=sys.stderr)
+                        return 1
+                with open(dep, "w", encoding="utf-8") as f:
+                    f.write(rewrite_map(text, target, root, prefixes))
+        return code
+    finally:
+        shutil.rmtree(temp)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
