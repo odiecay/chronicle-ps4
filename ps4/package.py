@@ -20,14 +20,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-# Where the tools are. Set OO_PS4_TOOLCHAIN to the OpenOrbis PS4 toolchain folder (the one holding bin/windows) and
-# DOTNET to a dotnet runtime (the program, or leave it unset to use the one on PATH). With neither set, the layout
-# the author's machine uses is tried: %LOCALAPPDATA%/Cole/PS4/tools/....
-RUNTIME = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'Cole/PS4'
-OO = Path(os.environ['OO_PS4_TOOLCHAIN']) if os.environ.get('OO_PS4_TOOLCHAIN') else RUNTIME / 'tools/OpenOrbis/OpenOrbis/PS4Toolchain'
+# Where the tools are: OO_PS4_TOOLCHAIN is the OpenOrbis PS4 toolchain folder (the one holding bin/windows) and DOTNET
+# is a dotnet runtime (leave it unset to use the one on PATH). See ps4/docs/BUILDING.md.
+if not os.environ.get('OO_PS4_TOOLCHAIN'):
+    raise SystemExit('Set OO_PS4_TOOLCHAIN to the OpenOrbis PS4 toolchain folder (see ps4/docs/BUILDING.md).')
+OO = Path(os.environ['OO_PS4_TOOLCHAIN'])
 BIN = OO / 'bin/windows'
 _dotnet = os.environ.get('DOTNET') or shutil.which('dotnet')
-DOTNET = Path(_dotnet) if _dotnet else RUNTIME / 'tools/dotnet/dotnet.exe'
+if not _dotnet:
+    raise SystemExit('dotnet was not found: put it on PATH or set DOTNET to dotnet.exe (see ps4/docs/BUILDING.md).')
+DOTNET = Path(_dotnet)
 ELF = ROOT / 'port/build/ps4/darkcloud.elf'
 TITLE = 'Chronicle PS4 (Dark Cloud)'
 TITLE_ID = 'DCLD00001'
@@ -47,7 +49,7 @@ args = parser.parse_args()
 
 for path in (ELF, DOTNET):
     if not path.is_file():
-        raise SystemExit(f'Missing {path}: build the PS4 target first, and set OO_PS4_TOOLCHAIN and DOTNET if your tools are not in the default place.')
+        raise SystemExit(f'Missing {path}: build the PS4 target first (see ps4/docs/BUILDING.md).')
 header = ELF.read_bytes()[:64]
 if header[:6] != b'\x7fELF\x02\x01' or int.from_bytes(header[18:20], 'little') != 62:
     raise SystemExit('Input must be a little-endian x86-64 ELF.')
