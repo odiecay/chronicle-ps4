@@ -6,6 +6,11 @@
 
 [Watch it running](https://www.youtube.com/watch?v=EqCQ85O4dbw)
 
+| | | |
+|---|---|---|
+| ![Gameplay](ps4/docs/screenshots/gameplay-1.jpg) | ![Gameplay](ps4/docs/screenshots/gameplay-2.jpg) | ![The opening book](ps4/docs/screenshots/opening-book.jpg) |
+| ![Installed on the PS4 home screen](ps4/docs/screenshots/installed.jpg) | ![Setup copying from the USB drive](ps4/docs/screenshots/setup-copying.jpg) | ![Setup unpacking the game](ps4/docs/screenshots/setup-unpacking.jpg) |
+
 ## Install in three steps
 
 You need a PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN), your own Dark Cloud (USA) disc image as an `.iso`, and a USB drive.
