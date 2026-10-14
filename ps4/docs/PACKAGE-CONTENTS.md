@@ -8,7 +8,7 @@ comes from your own disc image the first time you start it.
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `eboot.bin` | 5,433,952 | `9442318c2fec184fb55b587f83602ffb1295cd0e6128649d060ead910140a802` |
+| `eboot.bin` | 5,433,952 | `662ecc106b3780b9113c07f870dbd6ddba4ff61e1ab45335fa22568cb145f274` |
 
 `eboot.bin` is this repository's source, built with OpenOrbis and wrapped by its `create-fself`. Build it yourself
 with the steps in the [README](../../README.md); the file will differ byte for byte (the wrapper adds build-specific

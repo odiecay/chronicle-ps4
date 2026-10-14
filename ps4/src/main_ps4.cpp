@@ -70,6 +70,79 @@ void FatalSignal(int signal_number) {
     raise(signal_number);
 }
 
+static const char kDefaultConfig[] =
+    "{\n"
+    "    \"game\": {\n"
+    "        \"tick_rate\": 60.0,\n"
+    "        \"debug_mode\": false,\n"
+    "        \"qte_always_win\": false,\n"
+    "        \"element_quick_select\": false,\n"
+    "        \"language\": \"ask\",\n"
+    "        \"save_cursor_position\": true,\n"
+    "        \"message_speed\": \"normal\",\n"
+    "        \"clock\": true,\n"
+    "        \"time_speed\": \"normal\",\n"
+    "        \"map\": 2,\n"
+    "        \"enemy_damage\": true,\n"
+    "        \"player_damage\": true,\n"
+    "        \"enemy_hp\": true,\n"
+    "        \"names\": true\n"
+    "    },\n"
+    "    \"video\": {\n"
+    "        \"text_font\": \"sharp\",\n"
+    "        \"text_shadow\": 50,\n"
+    "        \"glyph_shadow\": 25,\n"
+    "        \"name_shadow\": 50,\n"
+    "        \"floor_shadow\": 50,\n"
+    "        \"boss_shadow\": 50,\n"
+    "        \"present_mode\": \"mailbox\",\n"
+    "        \"interpolation\": true,\n"
+    "        \"max_fps\": 60.0,\n"
+    "        \"width\": 1920,\n"
+    "        \"height\": 1080,\n"
+    "        \"fullscreen\": true,\n"
+    "        \"aspect\": \"auto\",\n"
+    "        \"ui_scale\": 1.0,\n"
+    "        \"show_fps\": false,\n"
+    "        \"fps_detail\": \"all\",\n"
+    "        \"detail_distance\": 0.0,\n"
+    "        \"shadow_distance\": 0.0,\n"
+    "        \"anisotropy\": 0,\n"
+    "        \"soft_focus\": false\n"
+    "    },\n"
+    "    \"audio\": {\n"
+    "        \"master_volume\": 1.0,\n"
+    "        \"sound\": \"stereo\",\n"
+    "        \"soundtrack\": \"ps2\"\n"
+    "    },\n"
+    "    \"input\": {\n"
+    "        \"mouse_sensitivity\": 0.1,\n"
+    "        \"stick_sensitivity\": 1.33,\n"
+    "        \"stick_invert_x\": false,\n"
+    "        \"stick_invert_y\": false,\n"
+    "        \"gyro\": \"held\",\n"
+    "        \"gyro_sensitivity\": 0.5,\n"
+    "        \"gyro_invert_x\": false,\n"
+    "        \"gyro_invert_y\": false,\n"
+    "        \"mouse_invert_y\": false,\n"
+    "        \"mouse_capture\": true,\n"
+    "        \"mouse_zoom\": false,\n"
+    "        \"touchpad\": true,\n"
+    "        \"touchpad_sensitivity\": 1.0,\n"
+    "        \"lightbar\": true,\n"
+    "        \"rumble_strength\": 1.0,\n"
+    "        \"glyphs\": \"new\",\n"
+    "        \"glyph_device\": \"auto\",\n"
+    "        \"mouse_camera_return\": 0.2,\n"
+    "        \"mouse_release\": [],\n"
+    "        \"vibration\": true,\n"
+    "        \"bindings\": {}\n"
+    "    },\n"
+    "    \"discord\": {\n"
+    "        \"rich_presence\": true\n"
+    "    }\n"
+    "}\n";
+
 void ReturnToSystem() {
     size_t arena = 0;
     size_t in_use = 0;
@@ -117,6 +190,16 @@ int main(int, char **) {
         setenv("DC_SKIP_INTRO", "1", 1);
     }
     mkdir("/data/darkcloud/save", 0777);
+    // The first run writes the settings this port is tuned for: soft focus off (with it on, the heavy cinematics and
+    // dungeons ran at 12 to 20 ticks a second instead of 60), mailbox presentation, a 60 fps cap, 1080p. A config.json
+    // that is already there is left alone, and every setting stays changeable from the game's options menu.
+    if (access("/data/darkcloud/save/config.json", F_OK) != 0) {
+        if (FILE *file = fopen("/data/darkcloud/save/config.json", "wb")) {
+            fwrite(kDefaultConfig, 1, sizeof(kDefaultConfig) - 1, file);
+            fclose(file);
+            printf("[PS4] wrote the default config.json\n");
+        }
+    }
     // The retail loading screens hold for about 6.6 s (400 ticks), and the location captions that come up with them
     // run on the same timer. The holds are cut to a few ticks (so the captions flash past); an empty file
     // /data/darkcloud/ps4_retail_loading keeps retail's holds and captions.

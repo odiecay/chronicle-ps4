@@ -25,6 +25,8 @@ The game finds your disc image and sets itself up. A few minutes later it says i
 
 Measured on a PS4 over a long session, in the Divine Beast Cave: an average of 59.9 ticks a second, with 99.5% of 1,292 half-minute windows at 55 or better. Logos are skipped and loading is shortened by default. Add an empty file named `ps4_show_intro` or `ps4_retail_loading` to `/data/darkcloud/` to get the original behaviour. The other options are listed in [`ps4/README.md`](ps4/README.md).
 
+The first run writes a `config.json` in `/data/darkcloud/save` with the settings this port is tuned for: soft focus off (with it on, the heaviest scenes drop well below 60), mailbox presentation, a 60 fps cap and 1080p. Everything can still be changed in the game's options, and a `config.json` that is already there is never overwritten.
+
 Your saves are in `/data/darkcloud/save` and stay on the console, including when you update the package.
 
 ## Known issues (v0.1.0, first preview)
