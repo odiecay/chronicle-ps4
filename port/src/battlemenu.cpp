@@ -12,6 +12,7 @@
 #include "snd.hpp"
 #include "texture.hpp"
 #include "weaponlevelup.hpp"
+#include "options/weapon_browser.hpp"
 
 // BattleMenuDraw is replaced only to drop retail's VU1 program call; the renderer has no programs.
 // The static helpers it calls cannot be reached from here, so they are carried over as retail has
@@ -230,6 +231,7 @@ PORT_OVERRIDE void BattleMenuDraw() {
         case BTLMENU_STATE_OPTION_CLOSE:
             DrawMenuOption();
             setbilinear(0);
+            if (options::WeaponBrowserOpen()) return;
             break;
         case BTLMENU_STATE_SAVE:
         case BTLMENU_STATE_SAVE_OPEN:

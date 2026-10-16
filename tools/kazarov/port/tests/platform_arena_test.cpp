@@ -102,6 +102,21 @@ TEST(PlatformArenaBlock, ContainsOnlyItsBlocks) {
     EXPECT_FALSE(ArenaContains(&other));
 }
 
+TEST(PlatformArenaBlock, WritableCapacityExcludesGuardsAndRetiredMappings) {
+    static char key;
+    auto *base = ArenaBlock(&key, 1000, 4096);
+    const auto capacity = ArenaWritableBytes(base);
+    ASSERT_GE(capacity, 1000u);
+    ASSERT_EQ(ArenaWritableBytes(base + 7), capacity - 7);
+    ASSERT_EQ(ArenaWritableBytes(base - 4096), capacity + 4096);
+    ASSERT_EQ(ArenaWritableBytes(base + capacity), 0u);
+    ASSERT_EQ(ArenaWritableBytes(base - 4097), 0u);
+    int local;
+    ASSERT_EQ(ArenaWritableBytes(&local), 0u);
+    ArenaBlock(&key, 100000);
+    ASSERT_EQ(ArenaWritableBytes(base), 0u);
+}
+
 TEST(PlatformArenaBlock, RequiresABlockAbove4GiB) {
 #ifdef NDEBUG
     GTEST_SKIP() << "the above-4 GiB check is debug-only";

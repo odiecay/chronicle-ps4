@@ -67,16 +67,23 @@ def build(args):
         if filecmp.cmp(old, path, shallow=False):
             continue
         leaf = Path(relative).name
-        if leaf.startswith(("slus_", "scus_", "sles_", "sces_")) or path.suffix.lower() in (".elf", ".irx") or relative in ("data.hd2", "languages.json"):
+        # Index/release metadata belongs to the preserved base tree. Changed
+        # offsets and sizes are represented in this pack's manifest instead.
+        if relative in ("data.hd2", "languages.json"):
+            continue
+        if leaf.startswith(("slus_", "scus_", "sles_", "sces_")) or path.suffix.lower() in (".elf", ".irx"):
             raise ValueError(f"Executable/index changes need a native port: {relative}")
         size = path.stat().st_size
-        if size != old.stat().st_size or not 0 < size <= 67108864:
-            raise ValueError(f"Fixed game-buffer contract needs equal nonzero sizes <=64 MiB: {relative}")
+        original_size = old.stat().st_size
+        if not 0 < size <= 67108864 or not 0 < original_size <= 67108864:
+            raise ValueError(f"File sizes need 1..64 MiB: {relative}")
+        if (size+2047)//2048 > (original_size+2047)//2048 and not args.allow_arena_growth:
+            raise ValueError(f"Larger asset needs --allow-arena-growth and a checked destination at runtime: {relative}")
         source = f"files/{relative}"
         if len(source) > 240 or any(part in (".", "..") for part in Path(relative).parts) or any(c in relative for c in "\\:\0"):
             raise ValueError(f"Unsupported asset path: {relative}")
         total += size
-        files.append({"path": relative, "source": source, "size": size,
+        files.append({"path": relative, "source": source, "size": size, "original_size": original_size,
                       "original_fnv1a64": fingerprint(old), "replacement_fnv1a64": fingerprint(path)})
         sources.append(path)
     if not files or len(files) > 512 or total > 536870912:
@@ -85,6 +92,8 @@ def build(args):
                 "game": "dark-cloud", "type": "character-pack" if args.character_name else "asset-pack", "files": files}
     if args.character_name:
         manifest["character"] = {"slot": 0, "default_name": args.character_name}
+    if args.allow_arena_growth:
+        manifest["arena_checked_growth"] = True
     if args.requires:
         dependencies = []
         for value in args.requires:
@@ -103,8 +112,8 @@ def build(args):
             raise ValueError("Invalid conflicting IDs")
         manifest["conflicts"] = args.conflicts
     text = json.dumps(manifest, indent=2) + "\n"
-    if len(text.encode()) > 65536:
-        raise ValueError("Manifest exceeds the runtime's 64 KiB limit")
+    if len(text.encode()) > 262144:
+        raise ValueError("Manifest exceeds the runtime's 256 KiB limit")
     # All contract checks precede creation. An interrupted copy remains a
     # diagnosable incomplete new folder; it never replaces an earlier pack.
     output.mkdir(parents=True, exist_ok=False)
@@ -124,6 +133,8 @@ def main():
     parser.add_argument("--name", required=True)
     parser.add_argument("--version", default="1")
     parser.add_argument("--character-name")
+    parser.add_argument("--allow-arena-growth", action="store_true",
+                        help="Permit larger replacements only when the runtime can bound their destination arena")
     parser.add_argument("--requires", action="append", default=[], metavar="ID[@VERSION]")
     parser.add_argument("--conflicts", action="append", default=[], metavar="ID")
     args = parser.parse_args()

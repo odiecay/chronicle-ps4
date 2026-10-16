@@ -23,6 +23,11 @@ void ArenaClearAll();
 // Retired blocks count: the game can still hold a pointer into one.
 bool ArenaContains(const void *pointer);
 
+// Remaining writable bytes in an active allocation, excluding the guard page
+// and retired mappings. This is an allocation boundary, not a claim that every
+// byte is logically unused by the caller.
+std::size_t ArenaWritableBytes(const void *pointer);
+
 // Takes the bases rather than reading the blocks, so tests drive the check ArenaBlock runs.
 void ArenaRequireOneAbove4GiB(const void *const *bases, std::size_t count);
 

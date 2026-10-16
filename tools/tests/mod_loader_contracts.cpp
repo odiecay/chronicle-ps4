@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
         Check(LoadModPackages(root).enabled.empty(), "unsupported mod types must be rejected");
         Write(root / "second" / "mod.json", "{broken");
         Check(LoadModPackages(root).enabled.empty(), "malformed manifest must be handled");
-        Write(root / "second" / "mod.json", std::string(65537, ' '));
+        Write(root / "second" / "mod.json", std::string(262145, ' '));
         Check(LoadModPackages(root).enabled.empty(), "oversized manifests must be handled");
         Check(fs::exists(root / "first" / "mod.json"), "loading must not change installed mods");
         std::cout << "PASS: mod activation, load order, diagnostics, compatibility and path contracts\n";

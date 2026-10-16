@@ -77,6 +77,17 @@ bool ArenaContains(const void *pointer) {
     return MapHolds(g_blocks, address) || MapHolds(g_retired, address);
 }
 
+std::size_t ArenaWritableBytes(const void *pointer) {
+    const auto address = reinterpret_cast<std::uintptr_t>(pointer);
+    for (const auto &block : g_blocks) {
+        const auto base = reinterpret_cast<std::uintptr_t>(block.memory.base);
+        const auto start = base - block.memory.lead;
+        const auto end = base + block.memory.capacity;
+        if (address >= start && address < end) return end - address;
+    }
+    return 0;
+}
+
 void ArenaRequireOneAbove4GiB(const void *const *bases, std::size_t count) {
 #ifndef NDEBUG
     for (std::size_t i = 0; i < count; i++) {

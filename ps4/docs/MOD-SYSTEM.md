@@ -48,3 +48,38 @@ It never modifies inputs or overwrites an output; executable/index patches
 require separate native implementation. Metadata FNV-1a hashes identify asset
 contents and are not authenticity signatures. PS2 code changes, if any, remain
 to be audited separately from DATA.DAT assets.
+
+## Completed Tora integration, same session
+
+The executable audit found exactly twelve changed bytes: six language rows of
+the default-name table, each Toan -> Tora. No other executable bytes changed.
+The native character-name hook supplies the equivalent behavior.
+
+The private pack contains 310 changed assets (215,017,516 bytes), excluding
+DATA.HD2 and extractor-generated languages.json. The original game directory
+and archive remain intact. Credits: SomberTwilight and nachschreien9289; the
+creator's trailer/download above is retained in external pack metadata.
+
+Format 2 can opt into `arena_checked_growth`. Each entry records original and
+replacement sizes/fingerprints. A replacement that exceeds the original
+sector-rounded capacity is refused unless its destination is in an active
+arena with sufficient writable capacity. Guards and retired mappings do not
+count. This checks allocation bounds; it does not prove that every caller's
+internal subdivisions or every modified scene is compatible. Manifests are
+bounded to 256 KiB to accommodate this real 310-file pack. Stack/static buffers
+retain the original capacity contract and cannot silently accept larger reads.
+
+Verified Windows runs against the same original data: pack enabled renders
+Tora, pack disabled renders Toan; both exit successfully after 180 ticks.
+The browser was driven through real menu input and captured with Baselard's
+evolution branches and signed requirements. Screenshots and exact input scripts
+are in `tora-windows-pack-01`. An initial visual check caught and corrected the
+system-message +100 name offset and the parent menu/help overlap.
+
+Six portable suites pass. The expanded native selection ran 78 cases: 76 passed
+and two debug-only arena cases skipped in RelWithDebInfo. Five targeted tests
+were rerun successfully after the final startup-identity lifetime correction.
+The PS4 package is APP_VER 01.03, title DCLD00001; hashes, validation, transfer
+receipts and save backups are in the experiment root. Hardware Tora/browser
+validation remains pending. Enhanced/Reforged gameplay overhauls and new sword
+content have not been ported in this first batch.

@@ -26,7 +26,7 @@ bool ValidateModAssets(const ModPackages &mods, const GameAssetIndex &original, 
         std::error_code ec;
         const auto source_size = std::filesystem::file_size(file.source, ec);
         if (base == original.end() || ec || source_size != file.size ||
-            std::filesystem::file_size(base->second, ec) != file.size || ec ||
+            std::filesystem::file_size(base->second, ec) != (file.original_size ? file.original_size : file.size) || ec ||
             ModFileFingerprint(base->second) != file.original_fnv || ModFileFingerprint(file.source) != file.replacement_fnv) {
             out = {};
             out.messages.push_back(mod.id + ": original/replacement size or content mismatch: " + file.game_path);
@@ -36,6 +36,8 @@ bool ValidateModAssets(const ModPackages &mods, const GameAssetIndex &original, 
         if (!inserted && candidate.messages.size() < 32)
             candidate.messages.push_back("file conflict " + file.game_path + "; higher-priority pack retained");
         candidate.sizes.emplace(file.source, file.size);
+        const auto original_size = file.original_size ? file.original_size : file.size;
+        candidate.original_capacities.emplace(file.source, (original_size+2047)/2048*2048);
     }
     out = std::move(candidate);
     return true;

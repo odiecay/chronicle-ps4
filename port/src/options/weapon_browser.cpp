@@ -44,7 +44,7 @@ const evolution::Weapon *Definition(int id) {
 std::string Name(int id) {
     const auto *info = GetCommonItemInfo(id);
     if (info && CommonMenuMes2.buff_system) {
-        if (const s16 *text = CommonMenuMes2.GetTextLineDataTop_system(info->msg)) {
+        if (const s16 *text = CommonMenuMes2.GetTextLineDataTop_system(info->msg + 100)) {
             std::vector<s16> codes;
             for (int n = 0; n < 100 && text[n] != MES_CODE_END; ++n) codes.push_back(text[n]);
             codes.push_back(MES_CODE_END);
@@ -115,7 +115,8 @@ void DrawWeaponBrowser() {
     const auto *target = Definition(node.id);
     Text(11, Name(node.id), 340, 140, 235);
     if (node.parent == 0) {
-        Text(12, "Current weapon.\nSelect a branch to\ninspect its requirements.", 340, 175, 235);
+        Text(12, tree.size() == 1 ? "No further evolution.\nTry another weapon." :
+                 "Current weapon.\nSelect a branch to\ninspect its requirements.", 340, 175, 235);
     } else if (const auto *parent = Definition(node.parent); parent && parent->special_next) {
         Text(12, "Mardan Garayan caught:\n" + std::to_string(GetFishMardanGarayanNum()) + " / " + std::to_string(parent->required_fish), 340, 175, 235);
     } else if (target) {

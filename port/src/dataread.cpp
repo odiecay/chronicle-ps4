@@ -85,8 +85,8 @@ int ReadWhole(const fs::path &file, void *buffer) {
 #endif
     std::error_code error;
     std::uintmax_t  size = fs::file_size(file, error);
-    if (!error && !ModAssetReadSizeValid(file, size)) {
-        std::fprintf(stderr, "mods: replacement changed size since activation: %s\n", PathsDisplay(file).c_str());
+    if (!error && !ModAssetReadValid(file, buffer, size)) {
+        std::fprintf(stderr, "mods: replacement size/destination contract failed: %s\n", PathsDisplay(file).c_str());
         std::fflush(stderr);
         std::abort();
     }

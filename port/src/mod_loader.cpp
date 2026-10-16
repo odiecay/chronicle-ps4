@@ -20,7 +20,7 @@ bool IdValid(const std::string &id) {
 nlohmann::json ReadManifest(const fs::path &path) {
     std::error_code ec;
     const auto size = fs::file_size(path, ec);
-    if (ec || size > 65536) {
+    if (ec || size > 262144) {
         return nullptr;
     }
     std::ifstream input(path, std::ios::binary);
@@ -76,6 +76,10 @@ std::optional<ModPackage> ReadPackage(const fs::path &root, const std::string &i
         return fail("invalid manifest");
     ModPackage p{id, j["name"].get<std::string>(), j["version"].get<std::string>(), folder / "assets"};
     p.type = j["type"].get<std::string>();
+    if (j.contains("arena_checked_growth")) {
+        if (!j["arena_checked_growth"].is_boolean() || j["format"] != 2) return fail("invalid resized-file policy");
+        p.arena_checked_growth = j["arena_checked_growth"].get<bool>();
+    }
     if (p.type != "texture-pack" && (j["format"] != 2 || (p.type != "asset-pack" && p.type != "character-pack")))
         return fail("unsupported package type or format");
     std::error_code ec;
@@ -115,11 +119,17 @@ std::optional<ModPackage> ReadPackage(const fs::path &root, const std::string &i
             });
             const auto source = folder / f["source"].get<std::string>();
             const auto size = f["size"].get<std::uint64_t>();
+            if (f.contains("original_size") && (!f["original_size"].is_number_integer() ||
+                f["original_size"] <= 0 || f["original_size"] > 67108864)) return fail("invalid original file size");
+            const auto original_size = f.value("original_size", size);
             if (!paths.insert(game_path).second || !fs::is_regular_file(source, ec) || !Contained(folder, source) ||
                 fs::file_size(source, ec) != size || ec) return fail("missing, escaped, duplicate or wrong-size replacement");
             total += size;
             if (total > 536870912) return fail("replacement files exceed 512 MiB");
-            p.files.push_back({game_path, source, size, f["original_fnv1a64"].get<std::string>(), f["replacement_fnv1a64"].get<std::string>()});
+            if ((size+2047)/2048 > (original_size+2047)/2048 && !p.arena_checked_growth)
+                return fail("larger files need explicit arena_checked_growth policy");
+            p.files.push_back({game_path, source, size, f["original_fnv1a64"].get<std::string>(),
+                f["replacement_fnv1a64"].get<std::string>(), original_size});
         }
     } else if (j.contains("files") || j.contains("character")) return fail("texture packs cannot replace binary files or character identity");
     if (p.type == "character-pack") {

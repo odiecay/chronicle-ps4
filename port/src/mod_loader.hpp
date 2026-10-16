@@ -12,6 +12,7 @@ struct ModFile {
     std::filesystem::path source;
     std::uint64_t size;
     std::string original_fnv, replacement_fnv;
+    std::uint64_t original_size = 0;
 };
 struct ModCharacter { int slot = 0; std::string default_name; };
 // Texture packs use PR #187's layout. Asset/character packs additionally declare
@@ -26,6 +27,7 @@ struct ModPackage {
     std::vector<std::string> conflicts;
     std::vector<ModFile> files;
     std::optional<ModCharacter> character;
+    bool arena_checked_growth = false;
 };
 
 struct ModPackages {
