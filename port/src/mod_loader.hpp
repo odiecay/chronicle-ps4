@@ -54,5 +54,7 @@ struct InstalledMod {
 };
 std::vector<InstalledMod> DiscoverMods(const std::filesystem::path &root);
 
-// Called once after configuration and save paths are available.
+// Called at startup, or at a drained title-screen reload before assets load.
 void InitializeMods();
+// Selection/name changes wait for the title boundary, never a live game area.
+bool ModSelectionPending();

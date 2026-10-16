@@ -18,6 +18,16 @@ std::vector<std::filesystem::path> fallback_roots;
 bool prepared = false;
 bool replace_custom_name = false;
 bool identity_configured = false;
+bool applied_configured = false;
+std::vector<std::string> applied_request;
+}
+
+bool ModSelectionPending() {
+    if (!prepared) return false;
+    const auto &config = ConfigGet();
+    return config.mods_configured != applied_configured ||
+           config.enabled_mods != applied_request ||
+           config.character_replace_custom_name != replace_custom_name;
 }
 
 void InitializeMods() {
@@ -26,6 +36,8 @@ void InitializeMods() {
     selected = config.mods_configured ? LoadModPackages(directory, config.enabled_mods) : LoadModPackages(directory);
     if (!prepared) fallback_roots = TextureAssetRoots();
     replace_custom_name = config.character_replace_custom_name;
+    applied_configured = config.mods_configured;
+    applied_request = config.enabled_mods;
     identity_configured = false;
     prepared = true;
     // Establish the original, normalized game index, validate the whole package
@@ -35,7 +47,7 @@ void InitializeMods() {
 
 void ApplyModAssetOverrides(GameAssetIndex &index) {
     if (!prepared) return;
-    auto mods = selected; // frozen at startup; config changes still require restart
+    auto mods = selected; // frozen until the next drained title-screen reload
     if (!ValidateModAssets(mods, index, overlay)) {
         mods.messages.insert(mods.messages.end(), overlay.messages.begin(), overlay.messages.end());
         mods.enabled.clear();

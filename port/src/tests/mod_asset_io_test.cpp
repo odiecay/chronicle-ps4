@@ -5,6 +5,7 @@
 #include "data_fixture.hpp"
 #include "dataread.hpp"
 #include "mod_assets.hpp"
+#include "mod_loader.hpp"
 #include "platform/arena.hpp"
 #include "platform/config.hpp"
 #include "platform/paths.hpp"
@@ -45,10 +46,29 @@ TEST(ModAssetIO, RealLoaderBoundsResizedReplacementsAndRestoresBase) {
     ASSERT_EQ(std::filesystem::file_size(root/"data/test.bin"), 2048u);
     Config config = ConfigGet(); config.enabled_mods.clear();
     ASSERT_TRUE(ConfigChange(config));
-    InitializeMods(); // a controlled startup reinitialization, not in-game hot reload
+    ASSERT_TRUE(ModSelectionPending());
+    // A gameplay toggle leaves the current area's reads untouched until the
+    // title reload explicitly activates the new selection.
+    ASSERT_EQ(LoadFile2(path, buffer, &size, 0), 1);
+    ASSERT_EQ(size, 4096);
+    InitializeMods(); // the drained title boundary
+    ASSERT_FALSE(ModSelectionPending());
     ASSERT_EQ(LoadFile2(path, buffer, &size, 0), 1);
     ASSERT_EQ(size, 2048);
     ASSERT_EQ(buffer[0], 1);
+    config.enabled_mods = {"growth"};
+    ASSERT_TRUE(ConfigChange(config));
+    ASSERT_TRUE(ModSelectionPending());
+    InitializeMods();
+    ASSERT_FALSE(ModSelectionPending());
+    ASSERT_EQ(LoadFile2(path, buffer, &size, 0), 1);
+    ASSERT_EQ(size, 4096);
+    ASSERT_EQ(buffer[0], 2);
+    config.character_replace_custom_name = true;
+    ASSERT_TRUE(ConfigChange(config));
+    ASSERT_TRUE(ModSelectionPending());
+    InitializeMods();
+    ASSERT_FALSE(ModSelectionPending());
     std::filesystem::remove_all(root);
 }
 

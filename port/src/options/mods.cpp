@@ -44,12 +44,12 @@ void PrepareModMenu() {
     rows.push_back(Native<&Config::qte_always_win>("game.qte_always_win", "Always Win QTEs",
         "Button prompt events\nend in a perfect result."));
     rows.push_back(Native<&Config::character_replace_custom_name>("mods.character_replace_custom_name", "Use Pack's Name",
-        "On: a character pack\nalso replaces custom\nnames for display.\nRestart to apply."));
+        "On: a character pack\nalso replaces custom\nnames for display.\nApplies at title."));
     const auto directory = PathsSaveRoot().parent_path() / "mods";
     const auto installed = DiscoverMods(directory);
     for (const auto &mod : installed) {
         const auto id = mod.id;
-        auto help = mod.supported ? "Version " + mod.version + "\nRestart to apply.\n" + mod.description
+        auto help = mod.supported ? "Version " + mod.version + "\nApplies at title.\n" + mod.description
                                   : "This mod cannot load.\n" + mod.problem;
         for (const auto &d : mod.requires_mods) help += "\nNeeds " + d.id + (d.version.empty() ? "" : " " + d.version);
         for (const auto &id : mod.conflicts) help += "\nConflicts: " + id;

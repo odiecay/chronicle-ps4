@@ -4,7 +4,7 @@ The released v0.1.0 package and the hardware-confirmed Mods-menu package are
 preserved under NAS backups. Development is on `development/mod-loader-ps4`.
 No game or mod artwork/audio/model data is committed to this repository.
 
-Implemented: installed-pack Options rows; restart-aware external activation;
+Implemented: installed-pack Options rows; title-boundary external activation;
 dependency/exact-version and conflict validation; original/replacement content
 fingerprints; atomic binary overlays; reversible protagonist default/custom
 names; a weapon evolution browser backed by retail masks and requirements;
@@ -14,7 +14,7 @@ appear in Mods. Town autosave defaults off and uses its own Auto slot.
 
 Character defaults affect the live name; the save writer restores the original
 name in its copy before computing checksums. A custom name edited in play is
-retained. Pack/model/voice changes require restart. This is not a PS2 trainer
+retained. Pack/model/voice changes apply at the title screen. This is not a PS2 trainer
 or an arbitrary native-code plugin interface.
 
 Validation, 2026-10-16: the complete OpenOrbis PS4 ELF and an isolated Windows
@@ -83,3 +83,23 @@ The PS4 package is APP_VER 01.03, title DCLD00001; hashes, validation, transfer
 receipts and save backups are in the experiment root. Hardware Tora/browser
 validation remains pending. Enhanced/Reforged gameplay overhauls and new sword
 content have not been ported in this first batch.
+
+## Title-screen activation, APP_VER 01.04
+
+External pack and character-name selections remain frozen during gameplay.
+Closing Options at the title with changes pending requests a normal title-mode
+reload. At its drained boundary the game stops the old sounds, rebuilds the
+validated asset overlay and texture roots, reloads global messages/sound tables,
+and runs TitleInit again (which releases the old managed textures and recreates
+the title's models). GlobalNameInit then establishes the selected defaults before
+New Game's book/name entry. A selection made during gameplay waits until the
+player returns to title. No application restart is required.
+
+Windows evidence: an actual controller-input run started with zero packs,
+opened title Options, enabled Tora, closed Options, activated all 310 overrides
+at the title reload, and selected New Game in the same process. The captured
+frame shows the opening book. The 35 selected native regression cases pass,
+including real loader enable/disable/re-enable and deferred reads; saves and
+default/custom name round trips remain covered. Evidence is under
+`C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-title-mod-reload-v04-20261016`.
+Physical PS4 testing of this activation boundary is still pending.

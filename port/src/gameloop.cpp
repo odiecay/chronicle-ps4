@@ -28,6 +28,7 @@
 #include "mainselect.hpp"
 #include "menu_option.hpp"
 #include "menu_save.hpp"
+#include "mod_loader.hpp"
 #include "mglib.hpp"
 #include "mglib_port.hpp"
 #include "nowload.hpp"
@@ -907,6 +908,17 @@ int RunGame(int argc, char **argv) {
     bool data_loaded = false;
     bool skip_title = false;
     for (;;) {
+        // The previous mode has finished drawing and drained its reads. Switch
+        // the entire pack selection only here, before TitleInit replaces the
+        // managed textures/models and GlobalNameInit establishes default names.
+        // Gameplay Options leave changes pending until the player returns here.
+        if (mode == GAME_MODE_TITLE && ModSelectionPending()) {
+            SndExit();
+            InitializeMods();
+            data_loaded = false; // reload system messages and sound tables too
+            std::fprintf(stderr, "mods: applied pending selection at title reload\n");
+            std::fflush(stderr);
+        }
         // A language chosen on the Options screen takes hold here, where the next area is about to load.
         LocalizeApplyPendingLanguage();
         if (mode != GAME_MODE_UNUSED_12 && !data_loaded) {
@@ -976,6 +988,13 @@ int RunGame(int argc, char **argv) {
 
             result = ModeLoop(skip_title);
             GameApplyLoopResult(old_main_mode, result);
+            if (result == 0 && mode == GAME_MODE_TITLE && ModSelectionPending() && !MenuOptionOpen()) {
+                // Close Options first; the current title's cached pack and
+                // menu objects must not survive an asset selection change.
+                NextMapNo = 800;
+                StartEventNo = -1;
+                result = 1;
+            }
             if (result == 0 && LocalizeLanguagePending() && !MenuOptionOpen() &&
                 (mode == GAME_MODE_EDIT || mode == GAME_MODE_TITLE)) {
                 // The language was changed in this town or title and the Options screen has closed: load
