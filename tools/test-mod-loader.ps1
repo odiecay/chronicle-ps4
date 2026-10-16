@@ -15,13 +15,17 @@ $previousPath = $env:PATH
 $results = @()
 try {
     $env:PATH = "$(Split-Path $compiler -Parent);$previousPath"
-    foreach ($case in @('mod_loader_contracts', 'texture_mod_lookup_contracts')) {
+    foreach ($case in @('mod_loader_contracts', 'texture_mod_lookup_contracts', 'mod_menu_contracts')) {
         $exe = Join-Path $outputRoot ($case + '.exe')
         $arguments = @('-std=c++20', '-O2', '-I', "$projectRoot/port/src", '-I',
             "$projectRoot/tools/kazarov/port", '-I', $JsonInclude,
             "$projectRoot/port/src/mod_loader.cpp")
         if ($case -eq 'texture_mod_lookup_contracts') {
             $arguments += "$projectRoot/port/src/texture_asset_lookup.cpp"
+        }
+        if ($case -eq 'mod_menu_contracts') {
+            $arguments += @("$projectRoot/port/src/mod_menu_state.cpp", "$projectRoot/port/src/options/mods.cpp",
+                "$projectRoot/port/src/platform/config.cpp")
         }
         $arguments += @("$projectRoot/tools/tests/$case.cpp", '-o', $exe)
         & $compiler @arguments *> (Join-Path $outputRoot ($case + '-build.log'))

@@ -16,6 +16,7 @@
 
 #include "platform/display.hpp"
 #include "platform/paths.hpp"
+#include "mod_loader.hpp"
 
 namespace {
 
@@ -532,6 +533,18 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
         config.master_volume = std::clamp(volume, 0.0f, 1.0f);
         return true;
     }
+    if (name == "mods.enabled") {
+        if (!value.is_array() || value.size() > 64) return false;
+        std::vector<std::string> ids;
+        for (const auto &id : value) {
+            if (!id.is_string()) return false;
+            ids.push_back(id.get<std::string>());
+        }
+        if (!TextureModIdsValid(ids)) return false;
+        config.enabled_mods = std::move(ids);
+        config.mods_configured = true;
+        return true;
+    }
     return false;
 }
 
@@ -674,6 +687,7 @@ std::string ConfigSerialize(const Config &config) {
     root["input"]["vibration"] = options.vibration;
     root["input"]["bindings"] = std::move(bindings);
     root["discord"]["rich_presence"] = config.discord_rich_presence;
+    if (config.mods_configured) root["mods"]["enabled"] = config.enabled_mods;
     return root.dump(4) + "\n";
 }
 
@@ -746,5 +760,5 @@ bool ConfigChange(const Config &config) {
 }
 
 bool ConfigAppliesOnRestart(std::string_view key) {
-    return key == "game.debug_mode";
+    return key == "game.debug_mode" || key == "mods.enabled";
 }

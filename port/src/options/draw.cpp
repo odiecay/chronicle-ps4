@@ -138,6 +138,7 @@ void DrawRows(int alpha) {
         bool       selected = g_screen.row == r;
         GameText &label = texts.labels[g_screen.page][r];
         label.RefreshGlyphs();
+        if (std::string_view(row.key).starts_with("mods.")) label.FitWidth(kValueX - kLabelX - 20);
         label.Draw(kLabelX, y, alpha);
         GameText &value = texts.values[g_screen.page][r];
         if (row.activate != nullptr) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -16,11 +17,11 @@ struct Row {
     const char *help = nullptr;
     int         game_help = -1;
     int (*count)(const Config &) = nullptr;
-    int (*get)(const Config &) = nullptr;
-    void (*set)(Config &, int choice) = nullptr;
-    std::string (*text)(const Config &) = nullptr;
+    std::function<int(const Config &)> get;
+    std::function<void(Config &, int)> set;
+    std::function<std::string(const Config &)> text;
     const char *names = nullptr;
-    void (*restore)(Config &config, const Config &defaults) = nullptr;
+    std::function<void(Config &, const Config &)> restore;
     // A binding row: the input action it edits. Its value is the action's current keys, and
     // pressing confirm starts listening for the next one. nullptr for every other row.
     const char *action = nullptr;
@@ -35,6 +36,8 @@ struct Page {
 };
 
 std::span<const Page> Pages();
+std::span<const Row> ModRows();
+void PrepareModMenu();
 
 // The key of a page's name: options.page.<name in lower case>; its help is that key with .help.
 std::string PageKey(const char *name);

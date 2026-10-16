@@ -4,10 +4,16 @@
 
 #include "platform/paths.hpp"
 #include "texture_assets.hpp"
+#include "platform/config.hpp"
+#include "mod_menu_state.hpp"
 
 void InitializeTextureMods() {
     const auto directory = PathsSaveRoot().parent_path() / "mods";
-    const auto mods = LoadTextureMods(directory);
+    const auto &config = ConfigGet();
+    const auto mods = config.mods_configured ? LoadTextureMods(directory, config.enabled_mods) : LoadTextureMods(directory);
+    std::vector<std::string> startup;
+    for (auto it = mods.enabled.rbegin(); it != mods.enabled.rend(); ++it) startup.push_back(it->id);
+    SetStartupModSelection(startup);
     auto roots = TextureAssetRoots();
     std::vector<std::filesystem::path> ordered;
     for (const auto &mod : mods.enabled) {

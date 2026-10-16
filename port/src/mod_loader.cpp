@@ -74,8 +74,28 @@ TextureMods LoadTextureMods(const fs::path &root) {
             return result;
         }
     }
-    for (const auto &value : order["enabled"]) {
-        const std::string id = value.get<std::string>();
+    std::vector<std::string> enabled;
+    for (const auto &value : order["enabled"]) enabled.push_back(value.get<std::string>());
+    return LoadTextureMods(root, enabled);
+}
+
+bool TextureModIdsValid(const std::vector<std::string> &ids) {
+    if (ids.size() > 64) return false;
+    std::set<std::string> seen;
+    for (const auto &id : ids) {
+        if (!IdValid(id) || !seen.insert(id).second) return false;
+    }
+    return true;
+}
+
+TextureMods LoadTextureMods(const fs::path &root, const std::vector<std::string> &enabled) {
+    TextureMods result;
+    if (!TextureModIdsValid(enabled)) {
+        result.messages.emplace_back("invalid enabled mod IDs; no texture mods enabled");
+        return result;
+    }
+    std::error_code ec;
+    for (const auto &id : enabled) {
         const auto folder = root / id;
         const auto manifest_path = folder / "mod.json";
         const auto manifest = ReadManifest(manifest_path);
@@ -96,4 +116,31 @@ TextureMods LoadTextureMods(const fs::path &root) {
     }
     std::reverse(result.enabled.begin(), result.enabled.end());
     return result;
+}
+
+std::vector<InstalledMod> DiscoverTextureMods(const fs::path &root) {
+    std::vector<InstalledMod> installed;
+    std::error_code ec;
+    const auto options = fs::directory_options::skip_permission_denied;
+    for (fs::directory_iterator it(root, options, ec), end; !ec && it != end; it.increment(ec)) {
+        if (installed.size() == 64) break;
+        const auto id = it->path().filename().string();
+        if (!IdValid(id) || !it->is_directory(ec) || !fs::is_regular_file(it->path() / "mod.json", ec)) continue;
+        InstalledMod entry;
+        entry.id = id;
+        entry.name = id;
+        const auto manifest = ReadManifest(it->path() / "mod.json");
+        if (VersionOne(manifest)) {
+            if (Text(manifest, "name")) entry.name = manifest["name"].get<std::string>();
+            if (Text(manifest, "version")) entry.version = manifest["version"].get<std::string>();
+            if (Text(manifest, "type")) entry.type = manifest["type"].get<std::string>();
+            if (Text(manifest, "description")) entry.description = manifest["description"].get<std::string>();
+        }
+        const auto validation = LoadTextureMods(root, {id});
+        entry.supported = !validation.enabled.empty();
+        if (!entry.supported) entry.problem = validation.messages.empty() ? "Invalid mod package" : validation.messages[0];
+        installed.push_back(std::move(entry));
+    }
+    std::sort(installed.begin(), installed.end(), [](const InstalledMod &a, const InstalledMod &b) { return a.id < b.id; });
+    return installed;
 }

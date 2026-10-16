@@ -801,7 +801,7 @@ std::span<const Row> BindingRows() {
 } // namespace
 
 std::span<const Page> Pages() {
-    static const std::vector<Page> pages = {
+    static std::vector<Page> pages = {
         {"Game",          "\"Game\"\nHow the game plays.",                           kGameRows         },
         {"Display",       "\"Display\"\nThe window and picture.",                    kDisplayRows      },
         {"Audio",         "\"Audio\"\nSound and music.",                             kAudioRows        },
@@ -809,7 +809,9 @@ std::span<const Page> Pages() {
         {"Text",          "\"Text\"\nLanguage, lettering and\nsymbols.",             kTextRows         },
         {"Accessibility", "\"Accessibility\"\nHelp with harder parts\nof the game.", kAccessibilityRows},
         {"Bindings",      "\"Bindings\"\nWhat each key and\nmouse button does.",       BindingRows()     },
+        {"Mods", "\"Mods\"\nEnable installed mods.\n* Restart to apply.", ModRows()},
     };
+    pages.back().rows = ModRows();
     return pages;
 }
 

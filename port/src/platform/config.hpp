@@ -34,6 +34,10 @@ struct ConfigGameOptions {
 };
 
 struct Config : HostSettings {
+    // The in-game Mods page owns this selection once it has been used. Older
+    // installs may still select packs through mods/load-order.json until then.
+    bool                     mods_configured = false;
+    std::vector<std::string> enabled_mods;
     bool              debug_mode = false;
     bool              qte_always_win = false;
     bool              element_quick_select = false;

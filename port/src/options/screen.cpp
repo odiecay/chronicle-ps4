@@ -588,6 +588,8 @@ int Open(int mode, int block_no, u_long128 *buffer) {
         return 0;
     }
 
+    PrepareModMenu();
+    g_texts.reset();
     RefreshTextsForLanguage();
     g_screen = Screen{};
     g_screen.open = true;
