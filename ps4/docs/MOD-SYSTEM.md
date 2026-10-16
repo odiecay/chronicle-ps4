@@ -158,3 +158,12 @@ are not validation evidence. PS4 compilation, PKG digest/signature validation,
 FTP readback and installation passed. Hardware memory and floor validation is
 pending a full close/relaunch. Evidence and the preserved pre-change ELF are
 in `C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-hd-palette-fix-v06-20261016`.
+
+The subsequent 01.06 hardware log confirms 16 indexed-HD activation checkpoints,
+zero texture-allocation failures, zero incomplete-framebuffer messages and no
+indexed image-copy rejection in the captured interval. One FMEM growth-limit
+warning remains, so this is not proof of unlimited texture headroom. The first
+town memory sample reports 175 MiB free flexible memory versus 28 MiB in the
+earlier RGBA-HD run; later menu activity reaches 28 MiB again. Visual confirmation
+of the reported floor defect and extended gameplay remain pending. Raw log and
+installation receipts are preserved with the 01.06 artifact checkpoint.
