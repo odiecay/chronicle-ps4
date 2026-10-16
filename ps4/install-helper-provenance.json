@@ -1,0 +1,18 @@
+[
+  {
+    "source": "G:/GTA4-PS4/tools/build-ps4-install-helper.py",
+    "source_sha256": "98a29f1727f7d03c89b8e8580b6a8cae1db6c63d380a74a9471126d8f7ee31e7",
+    "destination": "ps4/build_install_helper.py",
+    "target": "DCLD00001",
+    "source_of_native_service": "Z:/apps/spaghettikart-ps4/control/service.c",
+    "changes": "Application title, package scope, log path and payload filename; control CLI omits launch/stop."
+  },
+  {
+    "source": "G:/GTA4-PS4/tools/control-ps4-gta4-install.py",
+    "source_sha256": "7d649867523712dff73beb705695c41b4e10135fb845017fe3778e8813d09cc2",
+    "destination": "ps4/control_install.py",
+    "target": "DCLD00001",
+    "source_of_native_service": "Z:/apps/spaghettikart-ps4/control/service.c",
+    "changes": "Application title, package scope, log path and payload filename; control CLI omits launch/stop."
+  }
+]
