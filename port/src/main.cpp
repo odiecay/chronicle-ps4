@@ -21,6 +21,7 @@
 #include "localize.hpp"
 #include "menu_option.hpp"
 #include "menu_save.hpp"
+#include "mod_loader.hpp"
 #include "mglib.hpp"
 #include "nowload.hpp"
 #include "platform/audio.hpp"
@@ -417,6 +418,7 @@ int Run(int argc, const char **argv) {
     LoadInputScript(options.input);
 
     ConfigLoad();
+    InitializeTextureMods();
 #ifdef __PS4__
     std::fprintf(stderr, "startup: config ready\n");
 #endif

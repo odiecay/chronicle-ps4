@@ -48,6 +48,8 @@ enum class PortTextureOwner : uint8_t {
 struct PortDecodedTexture {
     unsigned                          width = 0;
     unsigned                          height = 0;
+    unsigned                          logical_width = 0;
+    unsigned                          logical_height = 0;
     gfx::TextureFormat                format = gfx::TextureFormat::Rgba8;
     bool                              has_alpha = true;
     std::vector<std::vector<uint8_t>> levels;

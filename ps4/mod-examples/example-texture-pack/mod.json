@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "id": "example-texture-pack",
+  "name": "Example texture pack (supply your own PNG artwork)",
+  "version": "0.1.0",
+  "game": "dark-cloud",
+  "type": "texture-pack"
+}

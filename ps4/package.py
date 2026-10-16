@@ -45,7 +45,16 @@ if not re.fullmatch(r'[A-Z]{2}[0-9]{4}-' + TITLE_ID + r'_[0-9]{2}-[A-Z0-9]{16}',
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--bundle-sprx', type=Path, help='directory holding libScePigletv2VSH.sprx and libSceShaccVSH.sprx')
+parser.add_argument('--elf', type=Path, default=ELF, help='ELF from an isolated PS4 build')
+parser.add_argument('--output', type=Path, default=HERE / 'out', help='fresh package output directory')
+parser.add_argument('--app-version', default='01.00', help='PS4 application version, NN.NN')
 args = parser.parse_args()
+ELF = args.elf.resolve()
+if not re.fullmatch(r'[0-9]{2}\.[0-9]{2}', args.app_version):
+    raise SystemExit('--app-version must be NN.NN.')
+output = args.output.resolve()
+if (output / (CONTENT_ID + '.pkg')).exists() or (output / 'build-evidence.json').exists():
+    raise SystemExit('Output already contains package evidence; choose a fresh --output directory.')
 
 for path in (ELF, DOTNET):
     if not path.is_file():
@@ -62,8 +71,7 @@ env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
 stage_root = Path(tempfile.gettempdir()) / 'chronicle-ps4-package-staging'
 stage_root.mkdir(parents=True, exist_ok=True)
 stage = Path(tempfile.mkdtemp(prefix='dcld-', dir=stage_root))
-output = HERE / 'out'
-output.mkdir(exist_ok=True)
+output.mkdir(parents=True, exist_ok=True)
 for directory in ('sce_sys/about', 'sce_module'):
     (stage / directory).mkdir(parents=True)
 shutil.copyfile(HERE / 'assets/icon0.png', stage / 'sce_sys/icon0.png')
@@ -114,7 +122,7 @@ sfo = 'sce_sys/param.sfo'
 pkgtool = [DOTNET, BIN / 'PkgTool.Core.dll']
 run(pkgtool + ['sfo_new', sfo])
 entries = {
-    'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, '01.00'), 'ATTRIBUTE': ('Integer', 4, '0'),
+    'APP_TYPE': ('Integer', 4, '1'), 'APP_VER': ('Utf8', 8, args.app_version), 'ATTRIBUTE': ('Integer', 4, '0'),
     'CATEGORY': ('Utf8', 4, 'gde'), 'FORMAT': ('Utf8', 4, 'obs'), 'CONTENT_ID': ('Utf8', 48, CONTENT_ID),
     'DOWNLOAD_DATA_SIZE': ('Integer', 4, '0'), 'SYSTEM_VER': ('Integer', 4, '1020'),
     'TITLE': ('Utf8', 128, TITLE), 'TITLE_ID': ('Utf8', 12, TITLE_ID), 'VERSION': ('Utf8', 8, '01.00'),

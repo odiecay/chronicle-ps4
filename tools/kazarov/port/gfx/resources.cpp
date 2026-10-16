@@ -532,8 +532,8 @@ TextureHandle CreateTexture(const TextureDesc &desc) {
     texture.render_target = false;
     texture.shares_main_depth = false;
     texture.frame = false;
-    texture.logical_width = desc.width;
-    texture.logical_height = desc.height;
+    texture.logical_width = desc.logical_width != 0 ? desc.logical_width : desc.width;
+    texture.logical_height = desc.logical_height != 0 ? desc.logical_height : desc.height;
     texture.last_draw_use = 0;
     texture.image = CreateImage(desc.width, desc.height, desc.mip_levels, VulkanFormat(desc.format),
                                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |

@@ -582,8 +582,8 @@ TextureHandle CreateTexture(const TextureDesc &desc) {
     texture.render_target = false;
     texture.shares_main_depth = false;
     texture.frame = false;
-    texture.logical_width = desc.width;
-    texture.logical_height = desc.height;
+    texture.logical_width = desc.logical_width != 0 ? desc.logical_width : desc.width;
+    texture.logical_height = desc.logical_height != 0 ? desc.logical_height : desc.height;
     texture.doomed = false;
     bool index8 = desc.format == TextureFormat::Index8;
     texture.image = CreateColorImage(desc.width, desc.height, desc.mip_levels, index8);

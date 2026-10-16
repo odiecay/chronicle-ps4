@@ -1,0 +1,11 @@
+{
+  "foundation": "Chronicle PS4 v0.1.0",
+  "base_commit": "a4ba2622b8bfdb8e0e8b02a5b519d2e87ba68013",
+  "texture_lookup_source": "https://github.com/TheMoonPeople/Chronicle/pull/187",
+  "texture_lookup_author": "Jeffiest and Chronicle contributors",
+  "source_ref": "3c8a816a",
+  "adaptation": "Named texture-pack manifests and explicit load order; logical texture dimensions supplied to both renderer backends",
+  "scope": "PNG texture packs only; PS2 executable patches, PCSX2 trainers, and gameplay overhauls are not supported by this loader",
+  "hardware_validation": "pending",
+  "published": false
+}
