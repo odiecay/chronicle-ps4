@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
             File(root / id / "assets/textures/hero.png");
         }
         File(root / "load-order.json", R"({"format":1,"enabled":["base-pack","patch-pack"]})");
-        const auto mods = LoadTextureMods(root);
+        const auto mods = LoadModPackages(root);
         std::vector<fs::path> roots;
         for (const auto &m : mods.enabled) roots.push_back(m.assets);
         TextureAssetsSetRoots(roots);
@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
         Check(TextureAssetPath("d01", "a_usa", "C:hero", 64, 32).empty(), "texture names must not name a Windows drive");
         File(root / "load-order.json", R"({"format":1,"enabled":["base-pack"]})");
         roots.clear();
-        for (const auto &m : LoadTextureMods(root).enabled) roots.push_back(m.assets);
+        for (const auto &m : LoadModPackages(root).enabled) roots.push_back(m.assets);
         TextureAssetsSetRoots(roots);
         Check(TextureAssetPath("d01", "a_usa", "hero", 64, 32) == root / "base-pack/assets/textures/hero.png",
               "disabling a patch must restore the lower-priority mod");

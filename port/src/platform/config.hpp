@@ -42,6 +42,8 @@ struct Config : HostSettings {
     bool              qte_always_win = false;
     bool              element_quick_select = false;
     bool              swap_keeps_lock_on = false;
+    bool              town_autosave = false;
+    bool              character_replace_custom_name = false;
     bool              interpolation = true;
     ConfigAspect      aspect = ConfigAspect::Auto;
     float             ui_scale = 1.0f;

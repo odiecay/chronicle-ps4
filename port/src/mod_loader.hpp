@@ -2,27 +2,42 @@
 
 #include <filesystem>
 #include <string>
+#include <cstdint>
+#include <optional>
 #include <vector>
 
-// Version 1 loads texture packs. Later enabled entries have higher priority.
-// Assets use Chronicle PR #187's area/language/shared texture layout.
-struct TextureMod {
+struct ModDependency { std::string id, version; }; // empty version accepts any; otherwise exact
+struct ModFile {
+    std::string game_path;
+    std::filesystem::path source;
+    std::uint64_t size;
+    std::string original_fnv, replacement_fnv;
+};
+struct ModCharacter { int slot = 0; std::string default_name; };
+// Texture packs use PR #187's layout. Asset/character packs additionally declare
+// exact-size file replacements, tied to the original and replacement contents.
+struct ModPackage {
     std::string id;
     std::string name;
     std::string version;
     std::filesystem::path assets;
+    std::string type = "texture-pack";
+    std::vector<ModDependency> requires_mods;
+    std::vector<std::string> conflicts;
+    std::vector<ModFile> files;
+    std::optional<ModCharacter> character;
 };
 
-struct TextureMods {
-    std::vector<TextureMod> enabled; // highest priority first
+struct ModPackages {
+    std::vector<ModPackage> enabled; // highest priority first
     std::vector<std::string> messages;
 };
 
 // Reads <root>/load-order.json and <root>/<id>/mod.json. Does not modify data,
 // save files, configuration, or the mod directory. An absent order enables none.
-TextureMods LoadTextureMods(const std::filesystem::path &root);
-TextureMods LoadTextureMods(const std::filesystem::path &root, const std::vector<std::string> &enabled);
-bool TextureModIdsValid(const std::vector<std::string> &ids);
+ModPackages LoadModPackages(const std::filesystem::path &root);
+ModPackages LoadModPackages(const std::filesystem::path &root, const std::vector<std::string> &enabled);
+bool ModIdsValid(const std::vector<std::string> &ids);
 
 struct InstalledMod {
     std::string id;
@@ -32,8 +47,10 @@ struct InstalledMod {
     std::string description;
     std::string problem;
     bool supported = false;
+    std::vector<ModDependency> requires_mods;
+    std::vector<std::string> conflicts;
 };
-std::vector<InstalledMod> DiscoverTextureMods(const std::filesystem::path &root);
+std::vector<InstalledMod> DiscoverMods(const std::filesystem::path &root);
 
 // Called once after configuration and save paths are available.
-void InitializeTextureMods();
+void InitializeMods();

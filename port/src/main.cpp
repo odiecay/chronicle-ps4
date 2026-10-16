@@ -419,7 +419,7 @@ int Run(int argc, const char **argv) {
     LoadInputScript(options.input);
 
     ConfigLoad();
-    InitializeTextureMods();
+    InitializeMods();
 #ifdef __PS4__
     std::fprintf(stderr, "startup: config ready\n");
 #endif

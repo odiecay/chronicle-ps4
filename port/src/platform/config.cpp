@@ -412,6 +412,12 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
     if (name == "game.swap_keeps_lock_on") {
         return ReadBool(value, config.swap_keeps_lock_on);
     }
+    if (name == "mods.town_autosave") {
+        return ReadBool(value, config.town_autosave);
+    }
+    if (name == "mods.character_replace_custom_name") {
+        return ReadBool(value, config.character_replace_custom_name);
+    }
     if (name == "game.debug_mode") {
         return ReadBool(value, config.debug_mode);
     }
@@ -543,7 +549,7 @@ bool Apply(Config &config, std::string_view name, const Json &value) {
             if (!id.is_string()) return false;
             ids.push_back(id.get<std::string>());
         }
-        if (!TextureModIdsValid(ids)) return false;
+        if (!ModIdsValid(ids)) return false;
         config.enabled_mods = std::move(ids);
         config.mods_configured = true;
         return true;
@@ -692,6 +698,8 @@ std::string ConfigSerialize(const Config &config) {
     root["input"]["bindings"] = std::move(bindings);
     root["discord"]["rich_presence"] = config.discord_rich_presence;
     if (config.mods_configured) root["mods"]["enabled"] = config.enabled_mods;
+    root["mods"]["town_autosave"] = config.town_autosave;
+    root["mods"]["character_replace_custom_name"] = config.character_replace_custom_name;
     return root.dump(4) + "\n";
 }
 
@@ -764,5 +772,5 @@ bool ConfigChange(const Config &config) {
 }
 
 bool ConfigAppliesOnRestart(std::string_view key) {
-    return key == "game.debug_mode" || key == "mods.enabled";
+    return key == "game.debug_mode" || key == "mods.enabled" || key == "mods.character_replace_custom_name";
 }

@@ -957,7 +957,7 @@ int RunGame(int argc, char **argv) {
         ClockSyncV();
         MGPortCutInterpolation();
         *reinterpret_cast<s32 *>(reinterpret_cast<char *>(SaveData) + kSaveMapNoOffset) = MapNo;
-        if (g_autosave && mode == GAME_MODE_EDIT && !event_start && !SaveSlotWriteAutosave()) {
+        if (g_autosave && ConfigGet().town_autosave && mode == GAME_MODE_EDIT && !event_start && !SaveSlotWriteAutosave()) {
             std::fprintf(stderr, "autosave: could not write %s\n", PathsDisplay(SaveSlotPath(kSaveSlotAutosave)).c_str());
         }
 

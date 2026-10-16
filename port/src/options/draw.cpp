@@ -8,6 +8,7 @@
 #include "menu_draw.hpp"
 #include "menuetc.hpp"
 #include "options/screen.hpp"
+#include "options/weapon_browser.hpp"
 #include "rect.hpp"
 #include "snd.hpp"
 #include "texture.hpp"
@@ -185,6 +186,11 @@ void Draw() {
     setbilinear(0);
 
     if (!g_screen.texture_ready) {
+        return;
+    }
+    if (WeaponBrowserOpen()) {
+        DrawWeaponBrowser();
+        setbilinear(1);
         return;
     }
 

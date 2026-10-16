@@ -20,6 +20,7 @@
 #include "platform_fixture.hpp"
 #include "save_slots.hpp"
 #include "savedata.hpp"
+#include "mod_character.hpp"
 
 #ifndef _WIN32
 #include <sys/stat.h>
@@ -160,6 +161,44 @@ SAVEDATA_INFO Save(int file_no) {
 
 TEST(SaveSlots, SaveDataIsPodSized) {
     ASSERT_TRUE(sizeof(CSaveData) == kSaveDataSize);
+}
+
+TEST(SaveSlots, CharacterPackDefaultSurvivesSaveAndDisable) {
+    const auto root = UseTempSaveRoot();
+    PrepareSave();
+    const ModName toan{181,202,188,201}, tora{181,202,205,188};
+    std::memcpy(g_save.GetCharaName(0), toan.data(), sizeof(toan));
+    ConfigureModCharacter("Tora", false);
+    ModCharacterLoaded(g_save);
+    ASSERT_EQ(std::memcmp(g_save.GetCharaName(0), tora.data(), sizeof(tora)), 0);
+    g_mc.SetBuff(g_menu_buffer);
+    ASSERT_EQ(SaveNew(0), 1);
+    const auto bytes = ReadSave(root, 0);
+    ASSERT_EQ(bytes.size(), kImageSize);
+    ASSERT_EQ(std::memcmp(bytes.data() + 18 * sizeof(s32), toan.data(), sizeof(toan)), 0);
+    ASSERT_EQ(std::memcmp(g_save.GetCharaName(0), tora.data(), sizeof(tora)), 0);
+    ConfigureModCharacter({}, false);
+    g_mc.file_no = 0;
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1); // includes real image checksum validation
+    ASSERT_EQ(std::memcmp(g_save.GetCharaName(0), toan.data(), sizeof(toan)), 0);
+    fs::remove_all(root);
+}
+
+TEST(SaveSlots, CharacterPackForcedNameKeepsCustomNameInSave) {
+    const auto root = UseTempSaveRoot();
+    PrepareSave();
+    const ModName custom{164,202,191,192,212}, tora{181,202,205,188};
+    std::memcpy(g_save.GetCharaName(0), custom.data(), sizeof(custom));
+    ConfigureModCharacter("Tora", true);
+    ModCharacterLoaded(g_save);
+    ASSERT_EQ(std::memcmp(g_save.GetCharaName(0), tora.data(), sizeof(tora)), 0);
+    g_mc.SetBuff(g_menu_buffer);
+    ASSERT_EQ(SaveNew(0), 1);
+    ConfigureModCharacter({}, false);
+    g_mc.file_no = 0;
+    ASSERT_EQ(RunOperation(g_mc, MC_OPERATION_LOAD), 1);
+    ASSERT_EQ(std::memcmp(g_save.GetCharaName(0), custom.data(), sizeof(custom)), 0);
+    fs::remove_all(root);
 }
 
 TEST(SaveSlots, FolderNamesAreBoardNumbers) {

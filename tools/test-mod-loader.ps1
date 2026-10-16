@@ -15,7 +15,8 @@ $previousPath = $env:PATH
 $results = @()
 try {
     $env:PATH = "$(Split-Path $compiler -Parent);$previousPath"
-    foreach ($case in @('mod_loader_contracts', 'texture_mod_lookup_contracts', 'mod_menu_contracts')) {
+    foreach ($case in @('mod_loader_contracts', 'texture_mod_lookup_contracts', 'mod_menu_contracts',
+                        'mod_assets_contracts', 'mod_character_contracts', 'weapon_evolution_contracts')) {
         $exe = Join-Path $outputRoot ($case + '.exe')
         $arguments = @('-std=c++20', '-O2', '-I', "$projectRoot/port/src", '-I',
             "$projectRoot/tools/kazarov/port", '-I', $JsonInclude,
@@ -27,6 +28,9 @@ try {
             $arguments += @("$projectRoot/port/src/mod_menu_state.cpp", "$projectRoot/port/src/options/mods.cpp",
                 "$projectRoot/port/src/platform/config.cpp")
         }
+        if ($case -eq 'mod_assets_contracts') { $arguments += "$projectRoot/port/src/mod_assets.cpp" }
+        if ($case -eq 'mod_character_contracts') { $arguments += "$projectRoot/port/src/mod_character.cpp" }
+        if ($case -eq 'weapon_evolution_contracts') { $arguments += "$projectRoot/port/src/weapon_evolution.cpp" }
         $arguments += @("$projectRoot/tools/tests/$case.cpp", '-o', $exe)
         & $compiler @arguments *> (Join-Path $outputRoot ($case + '-build.log'))
         if ($LASTEXITCODE -ne 0) { throw "$case failed to compile" }

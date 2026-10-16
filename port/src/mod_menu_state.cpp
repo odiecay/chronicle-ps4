@@ -21,7 +21,7 @@ void SetModRequested(Config &config, const std::string &id, bool enabled) {
     const auto it = std::find(requested.begin(), requested.end(), id);
     if (enabled && it == requested.end()) requested.push_back(id);
     if (!enabled && it != requested.end()) requested.erase(it);
-    if (!TextureModIdsValid(requested)) return;
+    if (!ModIdsValid(requested)) return;
     config.enabled_mods = std::move(requested);
     config.mods_configured = true;
 }

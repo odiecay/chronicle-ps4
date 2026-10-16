@@ -16,6 +16,7 @@
 #include "platform/save_state.hpp"
 #include "save_slots.hpp"
 #include "savedata.hpp"
+#include "mod_character.hpp"
 
 // The port has no memory card: the operations read and write the files save_slots.hpp names.
 // Each finishes in the step that starts it and returns 1, or -1 where retail's card would have
@@ -59,6 +60,7 @@ SaveState CurrentState() {
 void BuildImage(char *image, const char *version) {
     CSaveData *save = reinterpret_cast<CSaveData *>(image);
     memcpy(save, SaveData, sizeof(CSaveData));
+    ModCharacterForSave(*save);
     GameOptionsClear(*save);
     save->ConvertConfig(&sys_config);
     char *version_field = image + sizeof(CSaveData);
@@ -295,6 +297,7 @@ PORT_OVERRIDE int CMemoryCardAccess::LoadFromMc(int file_no) {
     SaveState state = CurrentState();
     SaveStateRead(SaveStatePath(), state);
     memcpy(SaveData, g_image, sizeof(CSaveData));
+    ModCharacterLoaded(*SaveData);
 
     // The save screen keeps starting at the last numbered save.
     if (file_no == kSaveSlotAutosave) {

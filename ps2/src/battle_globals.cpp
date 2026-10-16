@@ -105,29 +105,6 @@ enum NameEnterAction {
 
 // clang-format on
 
-/**
- * Holds the state of the name-entry screen.
- */
-struct NAME_SELECT {
-    s16   chara_no;      /**< The party member being named. */
-    s16   area;          /**< The part of the screen the cursor is in. @see NameSelectArea. */
-    s16   name_pos;      /**< The position in the name the next character goes to. */
-    s16   side_row;      /**< The row of the voicing column the cursor is on, or 0 when it is on the keyboard. */
-    s16   pushed_tab;    /**< The tab that was last pressed. @see NameSelectTab. */
-    s16   input_mode;    /**< The keyboard being shown. @see NameInputMode. */
-    s32   cursor;        /**< The key or tab the cursor is on. @see NameSelectTab. */
-    s16   state;         /**< What the screen is doing: fading, flashing a tab or leaving. @see NameSelectState. */
-    s32   state_count;   /**< How many frames the state has lasted. */
-    float cursor_x;      /**< Where the hand cursor is drawn across the screen. */
-    float cursor_y;      /**< Where the hand cursor is drawn down the screen. */
-    s32   frame;         /**< How many frames the screen has been drawn, for the cursor's sway. */
-    s16   language;      /**< The language the menus are in. */
-    s16   texture_block; /**< The texture block the screen's textures are read into. */
-    s16   loaded;        /**< Whether the screen's textures have been read. */
-};
-
-STATIC_ASSERT(sizeof(NAME_SELECT) == 0x2C);
-
 /** The state of the name-entry screen. */
 NAME_SELECT NameSelect;
 

@@ -1,4 +1,5 @@
 #include "options/screen.hpp"
+#include "options/weapon_browser.hpp"
 
 #include <algorithm>
 #include <format>
@@ -408,6 +409,13 @@ void RunMouse() {
 }
 
 void RunKeys() {
+    if (WeaponBrowserOpen()) {
+        const auto held = HeldButtons();
+        const auto moves = Pressed(held, PAD_DPAD, true);
+        const auto actions = Pressed(held, PAD_L1 | PAD_R1 | PAD_CIRCLE, false);
+        WeaponBrowserKeys(moves | actions);
+        return;
+    }
     if (g_screen.binding_row >= 0) {
         RunBindingCapture();
         return;
@@ -589,6 +597,7 @@ int Open(int mode, int block_no, u_long128 *buffer) {
     }
 
     PrepareModMenu();
+    CloseWeaponBrowser();
     g_texts.reset();
     RefreshTextsForLanguage();
     g_screen = Screen{};
@@ -678,7 +687,7 @@ int Run() {
             if (g_screen.bar_frames > 0) {
                 g_screen.bar_frames--;
             }
-            RunMouse();
+            if (!WeaponBrowserOpen()) RunMouse();
             if (g_screen.step == OPTION_STEP_RUN) {
                 RunKeys();
             }

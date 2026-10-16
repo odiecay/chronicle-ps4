@@ -22,6 +22,7 @@
 #include "../../tools/dcdata/dcdata.hpp"
 #include "language.h"
 #include "localize.hpp"
+#include "mod_assets.hpp"
 #include "platform/paths.hpp"
 
 namespace fs = std::filesystem;
@@ -84,6 +85,11 @@ int ReadWhole(const fs::path &file, void *buffer) {
 #endif
     std::error_code error;
     std::uintmax_t  size = fs::file_size(file, error);
+    if (!error && !ModAssetReadSizeValid(file, size)) {
+        std::fprintf(stderr, "mods: replacement changed size since activation: %s\n", PathsDisplay(file).c_str());
+        std::fflush(stderr);
+        std::abort();
+    }
 #ifdef __PS4__
     // One read() into the destination: no stream buffering in between.
     int descriptor = ::open(file.c_str(), O_RDONLY);
@@ -190,6 +196,7 @@ PORT_OVERRIDE void InitCDFile() {
     }
     data_indexed = true;
     CheckAgainstIndex(root);
+    ApplyModAssetOverrides(data_index);
 }
 
 PORT_OVERRIDE int LoadFile(char *path, void *buffer, int *out_size) {

@@ -181,9 +181,11 @@ TEST(PlatformConfig, FpsDetail) {
 }
 
 TEST(PlatformConfig, ShowFpsAndTheHostKeys) {
-    ASSERT_TRUE(ConfigParse("").show_fps);
+    // The PS4 release's shared host defaults hide the overlay until requested.
+    ASSERT_FALSE(ConfigParse("").show_fps);
+    ASSERT_TRUE(ConfigParse(R"({"video": {"show_fps": true}})").show_fps);
     ASSERT_TRUE(!ConfigParse(R"({"video": {"show_fps": false}})").show_fps);
-    ASSERT_TRUE(ConfigParse(R"({"video": {"show_fps": "maybe"}})").show_fps);
+    ASSERT_FALSE(ConfigParse(R"({"video": {"show_fps": "maybe"}})").show_fps);
 
     // The toggle is a binding like the pad's; its default (F3) is input's.
     Config config = ConfigParse(R"({"input": {"bindings": {"fps_toggle": ["F4", "Gamepad:guide"], "start": "Return"}}})");
