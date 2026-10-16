@@ -1,9 +1,14 @@
 #include "mod_loader.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <set>
+#if defined(__PS4__) && !defined(_WIN32)
+#include <sys/stat.h>
+extern "C" int Ps4PathLstat(const char *, struct stat *);
+#endif
 
 #include <nlohmann/json.hpp>
 
@@ -57,20 +62,55 @@ bool Hash(const nlohmann::json &j, const char *key) {
 
 bool Contained(const fs::path &parent, const fs::path &child) {
     std::error_code ec;
+#ifdef __PS4__
+    // OpenOrbis' bundled realpath uses Linux O_PATH and /proc/self/fd. PS4
+    // supplies neither contract, so filesystem::canonical rejects valid files.
+    // Require an existing, symlink-free path instead: no component can redirect
+    // an otherwise contained mod path outside its directory.
+    const auto base = fs::absolute(parent, ec).lexically_normal();
+    if (ec) return false;
+    const auto resolved = fs::absolute(child, ec).lexically_normal();
+    if (ec) return false;
+    const auto relative = resolved.lexically_relative(base);
+    if (relative.empty() || relative.is_absolute() || *relative.begin() == "..") return false;
+    fs::path checked;
+    for (const auto &component : resolved) {
+        checked /= component;
+#ifdef _WIN32
+        // Host contract tests exercise the same component walk.
+        const auto status = fs::symlink_status(checked, ec);
+        if (ec || !fs::exists(status) || fs::is_symlink(status)) return false;
+#else
+        // libc's lstat also delegates to an ENOSYS fstatat stub. Resolve the
+        // real libkernel service through the PS4 platform boundary instead.
+        struct stat status{};
+        if (Ps4PathLstat(checked.c_str(), &status) != 0 || S_ISLNK(status.st_mode)) return false;
+#endif
+    }
+    return true;
+#else
     const auto base = fs::canonical(parent, ec);
     if (ec) return false;
     const auto resolved = fs::canonical(child, ec);
     if (ec) return false;
     const auto relative = resolved.lexically_relative(base);
     return !relative.empty() && !relative.is_absolute() && *relative.begin() != "..";
+#endif
 }
 
 std::optional<ModPackage> ReadPackage(const fs::path &root, const std::string &id, std::string &why) {
-    auto fail = [&](const char *reason) -> std::optional<ModPackage> { why = id + ": " + reason; return {}; };
+    auto fail = [&](const char *reason) -> std::optional<ModPackage> {
+        why = id + ": " + reason;
+        std::fprintf(stderr, "mods: %s\n", why.c_str());
+        std::fflush(stderr);
+        return {};
+    };
     const auto folder = root / id;
     const auto path = folder / "mod.json";
     const auto j = ReadManifest(path);
-    if (!Contained(root, path) || !j.is_object() || !j.contains("format") || !j["format"].is_number_integer() ||
+    if (!Contained(root, path)) return fail("manifest path could not be verified");
+    if (!j.is_object()) return fail("manifest unreadable, oversized or invalid JSON");
+    if (!j.contains("format") || !j["format"].is_number_integer() ||
         !(j["format"] == 1 || j["format"] == 2) || !Text(j,"id") || j["id"] != id ||
         !Text(j,"name") || !Text(j,"version") || !Text(j,"game") || j["game"] != "dark-cloud" || !Text(j,"type"))
         return fail("invalid manifest");

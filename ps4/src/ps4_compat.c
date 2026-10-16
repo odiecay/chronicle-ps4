@@ -76,6 +76,43 @@ int __cxa_thread_atexit_impl(Ps4ThreadDtor destructor, void* object, void* dsoHa
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
+
+// Mod containment needs no-follow metadata. The bundled musl lstat calls an
+// unimplemented fstatat; its realpath additionally relies on Linux /proc. Use
+// the console's native POSIX lstat without changing global libc link order.
+extern int sceKernelGetModuleList(int *, size_t, size_t *);
+extern int sceKernelDlsym(int, const char *, void **);
+typedef int (*Ps4NativeLstat)(const char *, struct stat *);
+static Ps4NativeLstat sNativeLstat;
+static pthread_once_t sLstatOnce = PTHREAD_ONCE_INIT;
+
+static void Ps4FindNativeLstat(void) {
+    int modules[256];
+    size_t count = 0;
+    const int result = sceKernelGetModuleList(modules, 256, &count);
+    if (result == 0 && count <= 256) {
+        for (size_t i = 0; i < count; ++i) {
+            void *address = NULL;
+            if (sceKernelDlsym(modules[i], "lstat", &address) == 0 && address != NULL &&
+                address != (void *)&lstat) {
+                sNativeLstat = (Ps4NativeLstat)address;
+                fprintf(stderr, "mods: native no-follow metadata service resolved, module %d\n", modules[i]);
+                fflush(stderr);
+                return;
+            }
+        }
+    }
+    fprintf(stderr, "mods: native lstat unavailable (module list result %d, count %zu)\n", result, count);
+    fflush(stderr);
+}
+
+int Ps4PathLstat(const char *path, struct stat *status) {
+    pthread_once(&sLstatOnce, Ps4FindNativeLstat);
+    if (sNativeLstat == NULL) { errno = ENOSYS; return -1; }
+    return sNativeLstat(path, status);
+}
 
 int vsprintf(char *s, const char *format, va_list args) {
     va_list measure;

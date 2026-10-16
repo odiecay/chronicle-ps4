@@ -56,6 +56,16 @@ int main(int argc, char **argv) {
         Check(LoadModPackages(root).enabled.empty(), "malformed manifest must be handled");
         Write(root / "second" / "mod.json", std::string(262145, ' '));
         Check(LoadModPackages(root).enabled.empty(), "oversized manifests must be handled");
+        // A path inside a pack must not escape through an intermediate symlink.
+        // Windows may disallow symlink creation without developer privileges;
+        // hosts which can create one exercise the rejection contract directly.
+        Write(root / "linked" / "mod.json", R"({"format":1,"id":"linked","name":"Linked","version":"1","game":"dark-cloud","type":"texture-pack"})");
+        fs::create_directories(root / "external-assets");
+        std::error_code link_error;
+        fs::create_directory_symlink(root / "external-assets", root / "linked" / "assets", link_error);
+        if (!link_error) {
+            Check(LoadModPackages(root, {"linked"}).enabled.empty(), "symlinked assets must not escape the pack");
+        }
         Check(fs::exists(root / "first" / "mod.json"), "loading must not change installed mods");
         std::cout << "PASS: mod activation, load order, diagnostics, compatibility and path contracts\n";
         return 0;

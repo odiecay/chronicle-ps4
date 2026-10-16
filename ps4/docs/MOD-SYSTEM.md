@@ -103,3 +103,27 @@ including real loader enable/disable/re-enable and deferred reads; saves and
 default/custom name round trips remain covered. Evidence is under
 `C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-title-mod-reload-v04-20261016`.
 Physical PS4 testing of this activation boundary is still pending.
+
+## PS4 manifest rejection, APP_VER 01.05
+
+The first hardware menu test rejected Tora as `invalid manifest`. FTP readback
+confirmed the same 81,529-byte manifest and SHA-256 as the validated Windows
+pack. Linked ELF disassembly identified a platform mismatch in containment:
+OpenOrbis' musl `realpath` uses Linux O_PATH and /proc/self/fd; its `lstat`
+delegates to a `fstatat` stub which unconditionally returns ENOSYS. These
+implementations cannot establish canonical mod paths on PS4.
+
+PS4 now checks absolute, normalized path ancestry and refuses a symlink in any
+component. A narrow platform helper resolves the real native `lstat` service
+from loaded modules using GetModuleList/Dlsym, without changing global libc
+link order, guessing a module handle, issuing raw syscalls or disabling path
+containment. Resolution failure remains a rejection and is logged. Windows
+retains canonical-path handling. Manifest path rejection, unreadable/oversized
+JSON and invalid metadata now have distinct persistent messages.
+
+Six portable suites pass, the PS4 component-walk policy passes the host loader
+contracts, and the real Tora pack's 310 paths pass that policy. This does not
+prove the native service on hardware: the installed 01.05 candidate logs its
+resolution and awaits Codey's next menu test. Evidence, original/revised ELF
+disassembly, packages, transfer readback and installation receipts are under
+`C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-mod-path-fix-v05-20261016`.
