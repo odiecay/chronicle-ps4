@@ -127,3 +127,34 @@ prove the native service on hardware: the installed 01.05 candidate logs its
 resolution and awaits Codey's next menu test. Evidence, original/revised ELF
 disassembly, packages, transfer readback and installation receipts are under
 `C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-mod-path-fix-v05-20261016`.
+
+## HD texture storage, APP_VER 01.06
+
+01.05 hardware confirmed Tora activation and the native path service. The
+TickleMyFungus pack was then adapted by exact original texture/palette hashes:
+2,176 native paths, up to 2x resolution, 1024-pixel cap, PS2 alpha normalized.
+It is installed separately under `/data/darkcloud/mods/dark-cloud-upscaled-ps4`.
+
+The first HD hardware log confirmed replacements loading, but Piglet reached
+its configured 236 MiB flexible-memory limit. Image allocations and 1080p menu
+render targets failed. RGBA replacements also discarded source CLUTs, causing
+an indexed image-copy rejection. The reported floor colours remain a visual
+observation; their precise cause has not yet been confirmed on hardware.
+
+01.06 retains indexed storage and the original palette for indexed PS4 source
+textures. HD texels are mapped to that palette using premultiplied colour and
+alpha distance. This uses one byte instead of four per image texel and restores
+the existing palette-update/copy path. It retains the original colour range;
+it does not provide arbitrary full-colour art on those indexed textures.
+Desktop behaviour stays unchanged. `DC_TEXTURE_SOURCE_PALETTE` allows an
+isolated desktop build to exercise the same policy.
+
+The standalone regression matches exhaustive search for 8,192 samples against
+each of 16- and 256-entry palettes, including transparent edges. An isolated
+Windows game executable rendered 180 Norune ticks with the actual pack and
+this policy; its log confirms indexed HD replacements. Earlier fixture runs
+used the wrong mod directory and did not activate HD; they are preserved and
+are not validation evidence. PS4 compilation, PKG digest/signature validation,
+FTP readback and installation passed. Hardware memory and floor validation is
+pending a full close/relaunch. Evidence and the preserved pre-change ELF are
+in `C:/Users/Codey/AppData/Local/Cole/PS4/chronicle-hd-palette-fix-v06-20261016`.

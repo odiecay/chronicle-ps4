@@ -17,6 +17,7 @@
 #include "platform/imagefile.hpp"
 #include "platform/paths.hpp"
 #include "texture_port.hpp"
+#include "texture_asset_palette.hpp"
 
 extern s32 mode;
 
@@ -126,6 +127,15 @@ bool TextureAssetApply(const char *name, PortDecodedTexture &texture) {
     size_t                            level_count = texture.levels.size();
     std::vector<std::vector<uint8_t>> levels;
     bool                              translucent = false;
+    // PS4's texture/render-target pool is shared and limited. Expanding a game
+    // index texture to RGBA costs four times as much at the same HD resolution
+    // and discards the CLUT that the game still updates and copies. Keep its
+    // original palette and GS storage contract; only the texel density changes.
+#if defined(__PS4__) || defined(DC_TEXTURE_SOURCE_PALETTE)
+    const bool keep_palette = texture.format == gfx::TextureFormat::Index8;
+#else
+    const bool keep_palette = false;
+#endif
     for (size_t level = 0; level < level_count; level++) {
         int w = std::max(1, target_width >> level);
         int h = std::max(1, target_height >> level);
@@ -137,20 +147,24 @@ bool TextureAssetApply(const char *name, PortDecodedTexture &texture) {
             break;
         }
     }
+    if (keep_palette) {
+        const TextureAssetPalette palette(texture.palette, texture.four_bit);
+        for (auto &level : levels) level = palette.Encode(level);
+    }
     texture.logical_width = texture.width;
     texture.logical_height = texture.height;
     texture.width = static_cast<unsigned>(target_width);
     texture.height = static_cast<unsigned>(target_height);
     texture.levels = std::move(levels);
-    texture.format = gfx::TextureFormat::Rgba8;
+    texture.format = keep_palette ? gfx::TextureFormat::Index8 : gfx::TextureFormat::Rgba8;
     texture.has_alpha = translucent || texture.has_alpha;
-    texture.four_bit = false;
+    if (!keep_palette) texture.four_bit = false;
     static unsigned reported_applies = 0;
     if (reported_applies < 16) {
         ++reported_applies;
-        std::fprintf(stderr, "mods: texture %s, logical %ux%u, pixels %ux%u, source %s\n", name,
+        std::fprintf(stderr, "mods: texture %s, logical %ux%u, pixels %ux%u, source %s, storage %s\n", name,
                      texture.logical_width, texture.logical_height, texture.width, texture.height,
-                     PathsDisplay(path).c_str());
+                     PathsDisplay(path).c_str(), keep_palette ? "source CLUT / indexed HD" : "RGBA");
     }
     return true;
 }

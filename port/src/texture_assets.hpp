@@ -21,7 +21,9 @@ struct PortDecodedTexture;
 // A picture has the texture's shape (its sides in the same ratio) but may have more pixels: one with at least as many
 // pixels as the texture keeps them all, up to kTextureAssetMaxSide a side, and the game still sees the texture at its
 // own size. One with fewer is scaled up to the texture's size. Only colour textures are replaced whole; the picture
-// is RGBA, so a texture whose palette the game changes while it runs loses that effect. See docs/TEXTURE_ASSETS.md.
+// is RGBA on desktop. On PS4 an indexed source keeps its original CLUT and the replacement's extra texels are
+// mapped to it: palette animation and image copies still work, with one byte of image storage per HD texel.
+// This retains the source's colour range. See docs/TEXTURE_ASSETS.md.
 
 /// The most pixels a side of a replacement picture keeps; a larger one is scaled down to it.
 inline constexpr int kTextureAssetMaxSide = 8192;
