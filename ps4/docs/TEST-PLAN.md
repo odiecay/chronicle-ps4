@@ -137,6 +137,25 @@ Record what actually happens in the results table above, and copy the confirmed 
 | Slow cinematics and dungeons on a fresh install | 15 Oct 01:1x | FIXED | A fresh game used the default config, where soft focus is on. Heavy scenes then ran at 12 to 20 ticks a second (1,300 to 2,500 draws a tick, 50 to 80 ms of game-side work). The tested config has soft focus off. With the tested config restored: 572 windows, mean 59.6 ticks a second, 97.7% at 55 or better, and the heaviest scenes (2,671 draws a tick) at 60. Earlier theories (the memory pool, 720p, a screen recorder) were not the cause. The port now writes that config on the first run | boot log |
 | Still to do | | | T1 USB (bridge), T3 clean re-run with the fixed extractor, T4, T5, T6, T7, T9, T11 | |
 
+## World-map regression, v0.1.1 / APP_VER 01.07 (17 October 2026)
+
+PASS on the physical PS4: load a post-Dran Norune save, open travel through the
+normal gate/world-map event, select Matataki, confirm, and move in Matataki.
+The player confirmed arrival and movement. The console log records `bgm = 2`,
+`sound set = 1`, and `gedit/e02/scene.scn` loading.
+
+The crash log's PC `0x64f16d` maps to ELF offset `0x24f16d` in
+`EdEventMode`: writing the result through `p_jump_map_no`. Before the fix that
+reference was a 32-bit integer; the native fix retains `RS_STACKDATA *` and
+assigns `stack->p`. PS2 representation is unchanged.
+
+A desktop game regression used a private script fixture invoking the actual
+world-map external and menu. The old code crashed on destination confirmation
+(`0xc0000005`); the fixed code exited 0 and returned Matataki's value 2 into
+the native script stack. Package signature/hash validation and installed-PKG
+readback also passed. Do not infer full-game or all-pack compatibility from
+this test.
+
 ## What to send me after a run
 
 1. "Done" and the test number.

@@ -15,7 +15,7 @@
 
 You need a PS4 with [GoldHEN](https://github.com/GoldHEN/GoldHEN), your own Dark Cloud (USA) disc image as an `.iso`, and a USB drive.
 
-1. On the USB drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put `Chronicle-PS4-v0.1.0.pkg` (from the download) in the drive's main folder.
+1. On the USB drive, make a folder called **`darkcloud`** and put your `.iso` in it. Put the latest `Chronicle-PS4-*.pkg` (from the download) in the drive's main folder.
 2. Plug the drive into the PS4 and install the package with GoldHEN's **Package Installer**.
 3. Start **Chronicle PS4 (Dark Cloud)** from the home screen and leave the drive plugged in.
 
@@ -29,6 +29,8 @@ The game sets itself up from your disc image. A few minutes later it says it's r
 * Tested on firmware 13.52 with the **USA NTSC 1.02** disc. Other discs haven't been tried on a console.
 
 Your saves live in `/data/darkcloud/save` and stay on the console, including when you update.
+
+**v0.1.1 fixes the world-map crash after Dran.** It also includes the optional Mods menu, town autosave, weapon evolution browser and external asset-pack support. See the [release notes](ps4/docs/RELEASE-NOTES.md) for the changes and hardware validation.
 
 ## For developers
 

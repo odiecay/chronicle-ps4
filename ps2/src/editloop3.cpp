@@ -2691,7 +2691,13 @@ static int menu_mode_status;
 static char *p_use_item;
 
 /** Map requested by the world-map event command. */
+#ifdef PORT
+// This is a reference into the script stack, not a map number. Native hosts
+// have 64-bit pointers; retaining only stack->i loses its upper half.
+static RS_STACKDATA *p_jump_map_no;
+#else
 static int p_jump_map_no;
+#endif
 
 /** Whether execution of the current event has stopped. */
 static int event_stop;
@@ -3578,7 +3584,11 @@ static int _WORLD_MAP(RS_STACKDATA *stack, int argument_count) {
         return 0;
     }
 
+#ifdef PORT
+    p_jump_map_no = stack->p;
+#else
     p_jump_map_no = stack->i;
+#endif
     menu_mode = ED_MENU_WORLD_MAP;
     return 1;
 }

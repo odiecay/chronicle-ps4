@@ -47,7 +47,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--bundle-sprx', type=Path, help='directory holding libScePigletv2VSH.sprx and libSceShaccVSH.sprx')
 parser.add_argument('--elf', type=Path, default=ELF, help='ELF from an isolated PS4 build')
 parser.add_argument('--output', type=Path, default=HERE / 'out', help='fresh package output directory')
-parser.add_argument('--app-version', default='01.00', help='PS4 application version, NN.NN')
+parser.add_argument('--app-version', default='01.07', help='PS4 application version, NN.NN')
 args = parser.parse_args()
 ELF = args.elf.resolve()
 if not re.fullmatch(r'[0-9]{2}\.[0-9]{2}', args.app_version):
